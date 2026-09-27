@@ -130,7 +130,7 @@ export default function Projects() {
 
       // Extraer data URLs sueltas del contenido (imágenes/GIF embebidos)
       const dataUrlRegex = /data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g;
-      const found = content.match(dataUrlRegex) || [];
+      const found: string[] = content.match(dataUrlRegex) || [];
       let nextId = existing.length ? Math.max(...existing.map((f) => f.id)) + 1 : 1;
       const added = [...existing];
 
