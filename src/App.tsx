@@ -5,6 +5,7 @@ import Projects from './pages/Projects/Projects';
 import Contact from './pages/Contact/Contact';
 import BibliasMaker from './pages/BibliasMaker/BibliasMaker';
 import Writer from './pages/Writer/Writer';
+import Calcular from './pages/Calcular/calcular';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/proyectos" element={<Projects />} />
         <Route path="/biblias" element={<BibliasMaker />} />
         <Route path="/Writer" element={<Writer />} />
+        <Route path="/calcular" element={<Calcular />} />
       </Routes>
     </ThemeProvider>
   );

@@ -1,64 +1,245 @@
 /* =====================================================
    RBC-EASY – Sistema de Temas Profesional
+   - Fondos (bg-primary / bg-secondary) 100 % intactos
+   - Default (cyberpunk) sin ningún cambio
+   - Rainbow con arcoíris real (todos los colores)
+   - Máxima legibilidad + tipografía + utilidades extensas
    ===================================================== */
 
+/* ---------- Reset limpio ---------- */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: var(--bg-primary); /* se respeta exactamente el valor original */
+  color: var(--text-primary);
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transition:
+    background-color 0.4s ease,
+    color 0.4s ease;
+}
+
+/* ---------- Tipografía base legible ---------- */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+p, li, label, span, div {
+  line-height: 1.55;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: color var(--transition-fast);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+}
+
+img, svg {
+  max-width: 100%;
+  display: block;
+}
+
+/* ---------- Variables globales (no tocan fondos) ---------- */
+:root {
+  /* Tipografía */
+  --font-main: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+
+  /* Radios */
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Espaciado */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Overlays (solo para capas de texto, nunca tocan el fondo real) */
+  --overlay-strong: rgba(0, 0, 0, 0.75);
+  --overlay-medium: rgba(0, 0, 0, 0.55);
+  --overlay-light: rgba(0, 0, 0, 0.35);
+  --overlay-soft: rgba(0, 0, 0, 0.2);
+
+  /* Focus accesible */
+  --focus-ring: 0 0 0 3px var(--glow);
+
+  /* Transiciones */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow: 0.4s ease;
+
+  /* Sombras de texto para legibilidad sobre imágenes */
+  --text-shadow-strong:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 12px rgba(0, 0, 0, 0.6);
+  --text-shadow-medium:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 8px rgba(0, 0, 0, 0.4);
+  --text-shadow-soft:
+    0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+/* =====================================================
+   TEMAS – SOLO COLORES DE TEXTO / ACENTO / BORDES
+   (bg-primary y bg-secondary se dejan EXACTAMENTE iguales)
+   ===================================================== */
+
+/* ---------- Cyberpunk (DEFAULT – IDÉNTICO) ---------- */
 :root,
 [data-theme="cyberpunk"] {
-  /* Red – Default (el original que te gusta) */
   --bg-primary: #0c0c0c;
   --bg-secondary: #161616;
   --bg-card: rgba(12, 12, 12, 0.94);
   --text-primary: #ffffff;
   --text-secondary: #c8c8c8;
+  --text-muted: #9ca3af;
   --accent: #ff1a1a;
   --accent-hover: #ff4444;
   --border: #ff1a1a;
   --glow: rgba(255, 26, 26, 0.55);
   --shadow: 0 0 22px rgba(255, 26, 26, 0.45);
+  --card-border: rgba(255, 26, 26, 0.28);
   --font-main: 'Segoe UI', system-ui, sans-serif;
   --radius: 10px;
 }
 
-/* ---------- Modo Oscuro (azul + negro) ---------- */
+/* ---------- Dark ---------- */
 [data-theme="dark"] {
   --bg-primary: #0a0f1a;
   --bg-secondary: #111827;
   --bg-card: rgba(15, 23, 42, 0.95);
   --text-primary: #e0f2fe;
   --text-secondary: #94a3b8;
+  --text-muted: #64748b;
   --accent: #38bdf8;
   --accent-hover: #7dd3fc;
   --border: #38bdf8;
   --glow: rgba(56, 189, 248, 0.4);
   --shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+  --card-border: rgba(56, 189, 248, 0.22);
 }
 
-/* ---------- Modo Claro (negro sobre blanco limpio) ---------- */
+/* ---------- Light ---------- */
 [data-theme="light"] {
   --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
   --bg-card: rgba(255, 255, 255, 0.97);
   --text-primary: #0f172a;
   --text-secondary: #475569;
+  --text-muted: #64748b;
   --accent: #0f172a;
   --accent-hover: #1e293b;
   --border: #0f172a;
   --glow: rgba(15, 23, 42, 0.15);
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --card-border: rgba(15, 23, 42, 0.12);
 }
 
-/* ---------- Rainbow ---------- */
+/* ---------- Rainbow – ARCOÍRIS REAL ---------- */
 [data-theme="rainbow"] {
+  /* Fondos exactamente iguales al original */
   --bg-primary: #0f0a1a;
   --bg-secondary: #1a1028;
   --bg-card: rgba(20, 12, 36, 0.95);
+
+  /* Texto legible */
   --text-primary: #fdf4ff;
   --text-secondary: #e9d5ff;
-  --accent: #e879f9;
-  --accent-hover: #f0abfc;
-  --border: #e879f9;
-  --glow: rgba(232, 121, 249, 0.5);
-  --shadow: 0 0 24px rgba(232, 121, 249, 0.4);
+  --text-muted: #c4b5fd;
+
+  /* Acento principal (rojo del arcoíris) */
+  --accent: #ff003c;
+  --accent-hover: #ff4d6d;
+
+  /* Bordes y glow usan el arcoíris completo */
+  --border: #ff003c;
+  --glow: rgba(255, 0, 60, 0.55);
+  --shadow: 0 0 24px rgba(255, 0, 60, 0.4);
+  --card-border: rgba(255, 0, 60, 0.3);
+
+  /* Variables exclusivas del arcoíris (todos los colores) */
+  --rainbow-red: #ff003c;
+  --rainbow-orange: #ff7a00;
+  --rainbow-yellow: #ffd600;
+  --rainbow-green: #00e676;
+  --rainbow-blue: #00b0ff;
+  --rainbow-indigo: #651fff;
+  --rainbow-violet: #d500f9;
+
+  --rainbow-gradient: linear-gradient(
+    90deg,
+    #ff003c 0%,
+    #ff7a00 16%,
+    #ffd600 33%,
+    #00e676 50%,
+    #00b0ff 66%,
+    #651fff 83%,
+    #d500f9 100%
+  );
+
+  --rainbow-gradient-vertical: linear-gradient(
+    180deg,
+    #ff003c 0%,
+    #ff7a00 16%,
+    #ffd600 33%,
+    #00e676 50%,
+    #00b0ff 66%,
+    #651fff 83%,
+    #d500f9 100%
+  );
+
+  --rainbow-glow:
+    0 0 8px #ff003c,
+    0 0 16px #ff7a00,
+    0 0 24px #ffd600,
+    0 0 32px #00e676,
+    0 0 40px #00b0ff,
+    0 0 48px #651fff,
+    0 0 56px #d500f9;
 }
 
 /* ---------- Raygun Gothic ---------- */
@@ -68,11 +249,13 @@
   --bg-card: rgba(30, 24, 16, 0.95);
   --text-primary: #f5e8c7;
   --text-secondary: #d4c4a0;
+  --text-muted: #b8a88a;
   --accent: #d4a017;
   --accent-hover: #e8b923;
   --border: #d4a017;
   --glow: rgba(212, 160, 23, 0.45);
   --shadow: 0 0 18px rgba(212, 160, 23, 0.35);
+  --card-border: rgba(212, 160, 23, 0.28);
 }
 
 /* ---------- Cluttercore ---------- */
@@ -82,11 +265,13 @@
   --bg-card: rgba(45, 28, 28, 0.95);
   --text-primary: #ffe4e4;
   --text-secondary: #f5c2c2;
+  --text-muted: #e8a0a0;
   --accent: #ff6b6b;
   --accent-hover: #ff8e8e;
   --border: #ff6b6b;
   --glow: rgba(255, 107, 107, 0.45);
   --shadow: 0 0 18px rgba(255, 107, 107, 0.35);
+  --card-border: rgba(255, 107, 107, 0.28);
 }
 
 /* ---------- Oceancore ---------- */
@@ -96,11 +281,13 @@
   --bg-card: rgba(5, 30, 50, 0.95);
   --text-primary: #e0f7fa;
   --text-secondary: #b2ebf2;
+  --text-muted: #80deea;
   --accent: #00bcd4;
   --accent-hover: #26c6da;
   --border: #00bcd4;
   --glow: rgba(0, 188, 212, 0.4);
   --shadow: 0 0 20px rgba(0, 188, 212, 0.3);
+  --card-border: rgba(0, 188, 212, 0.25);
 }
 
 /* ---------- Spacecore ---------- */
@@ -110,11 +297,13 @@
   --bg-card: rgba(10, 10, 30, 0.95);
   --text-primary: #e0e7ff;
   --text-secondary: #c7d2fe;
+  --text-muted: #a5b4fc;
   --accent: #818cf8;
   --accent-hover: #a5b4fc;
   --border: #818cf8;
   --glow: rgba(129, 140, 248, 0.45);
   --shadow: 0 0 22px rgba(129, 140, 248, 0.35);
+  --card-border: rgba(129, 140, 248, 0.28);
 }
 
 /* ---------- Goblincore ---------- */
@@ -124,11 +313,13 @@
   --bg-card: rgba(22, 34, 22, 0.95);
   --text-primary: #dcfce7;
   --text-secondary: #bbf7d0;
+  --text-muted: #86efac;
   --accent: #86efac;
   --accent-hover: #a7f3d0;
   --border: #86efac;
   --glow: rgba(134, 239, 172, 0.35);
   --shadow: 0 0 18px rgba(134, 239, 172, 0.25);
+  --card-border: rgba(134, 239, 172, 0.28);
 }
 
 /* ---------- Fairycore ---------- */
@@ -138,25 +329,29 @@
   --bg-card: rgba(30, 18, 42, 0.95);
   --text-primary: #faf5ff;
   --text-secondary: #e9d5ff;
+  --text-muted: #d8b4fe;
   --accent: #d8b4fe;
   --accent-hover: #e9d5ff;
   --border: #d8b4fe;
   --glow: rgba(216, 180, 254, 0.45);
   --shadow: 0 0 20px rgba(216, 180, 254, 0.35);
+  --card-border: rgba(216, 180, 254, 0.28);
 }
 
-/* ---------- Nightcore Aesthetic ---------- */
+/* ---------- Nightcore ---------- */
 [data-theme="nightcore"] {
   --bg-primary: #0c0a14;
   --bg-secondary: #16122a;
   --bg-card: rgba(18, 14, 32, 0.95);
   --text-primary: #fce7f3;
   --text-secondary: #fbcfe8;
+  --text-muted: #f9a8d4;
   --accent: #f472b6;
   --accent-hover: #f9a8d4;
   --border: #f472b6;
   --glow: rgba(244, 114, 182, 0.5);
   --shadow: 0 0 22px rgba(244, 114, 182, 0.4);
+  --card-border: rgba(244, 114, 182, 0.3);
 }
 
 /* ---------- Retro CGI ---------- */
@@ -166,11 +361,13 @@
   --bg-card: rgba(15, 23, 42, 0.95);
   --text-primary: #f1f5f9;
   --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
   --accent: #f43f5e;
   --accent-hover: #fb7185;
   --border: #f43f5e;
   --glow: rgba(244, 63, 94, 0.4);
   --shadow: 0 0 18px rgba(244, 63, 94, 0.3);
+  --card-border: rgba(244, 63, 94, 0.28);
 }
 
 /* ---------- Vectorheart ---------- */
@@ -180,11 +377,13 @@
   --bg-card: rgba(18, 14, 36, 0.95);
   --text-primary: #fdf2f8;
   --text-secondary: #fce7f3;
+  --text-muted: #f9a8d4;
   --accent: #ec4899;
   --accent-hover: #f472b6;
   --border: #ec4899;
   --glow: rgba(236, 72, 153, 0.5);
   --shadow: 0 0 22px rgba(236, 72, 153, 0.4);
+  --card-border: rgba(236, 72, 153, 0.3);
 }
 
 /* ---------- Windowscore ---------- */
@@ -194,12 +393,14 @@
   --bg-card: rgba(255, 255, 255, 0.95);
   --text-primary: #000000;
   --text-secondary: #333333;
+  --text-muted: #555555;
   --accent: #0054e3;
   --accent-hover: #0066ff;
   --border: #0054e3;
   --glow: rgba(0, 84, 227, 0.25);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   --radius: 4px;
+  --card-border: rgba(0, 84, 227, 0.22);
 }
 
 /* ---------- Frutiger Aero ---------- */
@@ -209,12 +410,14 @@
   --bg-card: rgba(255, 255, 255, 0.9);
   --text-primary: #0c4a6e;
   --text-secondary: #0369a1;
+  --text-muted: #0284c7;
   --accent: #0284c7;
   --accent-hover: #0ea5e9;
   --border: #0284c7;
   --glow: rgba(2, 132, 199, 0.3);
   --shadow: 0 4px 20px rgba(2, 132, 199, 0.15);
   --radius: 14px;
+  --card-border: rgba(2, 132, 199, 0.22);
 }
 
 /* ---------- Vaporwave ---------- */
@@ -224,11 +427,13 @@
   --bg-card: rgba(30, 0, 55, 0.95);
   --text-primary: #fce7f3;
   --text-secondary: #fbcfe8;
+  --text-muted: #f9a8d4;
   --accent: #ff71ce;
   --accent-hover: #ff8ad8;
   --border: #b967ff;
   --glow: rgba(255, 113, 206, 0.55);
   --shadow: 0 0 24px rgba(255, 113, 206, 0.4);
+  --card-border: rgba(255, 113, 206, 0.32);
 }
 
 /* ---------- Y2K ---------- */
@@ -238,12 +443,14 @@
   --bg-card: rgba(15, 15, 15, 0.95);
   --text-primary: #e0fffa;
   --text-secondary: #a7f3d0;
+  --text-muted: #5eead4;
   --accent: #00ffcc;
   --accent-hover: #5eead4;
   --border: #00ffcc;
   --glow: rgba(0, 255, 204, 0.55);
   --shadow: 0 0 24px rgba(0, 255, 204, 0.4);
   --radius: 12px;
+  --card-border: rgba(0, 255, 204, 0.32);
 }
 
 /* ---------- Glassmorphism ---------- */
@@ -253,12 +460,14 @@
   --bg-card: rgba(255, 255, 255, 0.08);
   --text-primary: #f0f9ff;
   --text-secondary: #bae6fd;
+  --text-muted: #7dd3fc;
   --accent: #22d3ee;
   --accent-hover: #67e8f9;
   --border: rgba(255, 255, 255, 0.2);
   --glow: rgba(34, 211, 238, 0.35);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   --radius: 16px;
+  --card-border: rgba(255, 255, 255, 0.15);
 }
 
 /* ---------- Solarpunk ---------- */
@@ -268,11 +477,13 @@
   --bg-card: rgba(16, 40, 28, 0.95);
   --text-primary: #ecfdf5;
   --text-secondary: #a7f3d0;
+  --text-muted: #6ee7b7;
   --accent: #34d399;
   --accent-hover: #6ee7b7;
   --border: #34d399;
   --glow: rgba(52, 211, 153, 0.4);
   --shadow: 0 0 20px rgba(52, 211, 153, 0.3);
+  --card-border: rgba(52, 211, 153, 0.28);
 }
 
 /* ---------- Steampunk ---------- */
@@ -282,11 +493,13 @@
   --bg-card: rgba(35, 26, 16, 0.95);
   --text-primary: #fef3c7;
   --text-secondary: #fde68a;
+  --text-muted: #fcd34d;
   --accent: #d97706;
   --accent-hover: #f59e0b;
   --border: #d97706;
   --glow: rgba(217, 119, 6, 0.4);
   --shadow: 0 0 18px rgba(217, 119, 6, 0.3);
+  --card-border: rgba(217, 119, 6, 0.28);
 }
 
 /* ---------- Dieselpunk ---------- */
@@ -296,11 +509,13 @@
   --bg-card: rgba(30, 26, 22, 0.95);
   --text-primary: #fef3c7;
   --text-secondary: #fde68a;
+  --text-muted: #fcd34d;
   --accent: #b45309;
   --accent-hover: #d97706;
   --border: #b45309;
   --glow: rgba(180, 83, 9, 0.4);
   --shadow: 0 0 16px rgba(180, 83, 9, 0.3);
+  --card-border: rgba(180, 83, 9, 0.28);
 }
 
 /* ---------- Cassette Futurism ---------- */
@@ -310,12 +525,14 @@
   --bg-card: rgba(18, 18, 18, 0.95);
   --text-primary: #d1fae5;
   --text-secondary: #a7f3d0;
+  --text-muted: #6ee7b7;
   --accent: #10b981;
   --accent-hover: #34d399;
   --border: #10b981;
   --glow: rgba(16, 185, 129, 0.4);
   --shadow: 0 0 18px rgba(16, 185, 129, 0.3);
   --radius: 2px;
+  --card-border: rgba(16, 185, 129, 0.28);
 }
 
 /* ---------- Synthwave ---------- */
@@ -325,11 +542,13 @@
   --bg-card: rgba(18, 6, 36, 0.95);
   --text-primary: #fdf2f8;
   --text-secondary: #fbcfe8;
+  --text-muted: #f9a8d4;
   --accent: #f43f5e;
   --accent-hover: #fb7185;
   --border: #f43f5e;
   --glow: rgba(244, 63, 94, 0.5);
   --shadow: 0 0 24px rgba(244, 63, 94, 0.4);
+  --card-border: rgba(244, 63, 94, 0.3);
 }
 
 /* ---------- Brutalismo Digital ---------- */
@@ -339,6 +558,7 @@
   --bg-card: #000000;
   --text-primary: #ffffff;
   --text-secondary: #e5e5e5;
+  --text-muted: #a3a3a3;
   --accent: #ffffff;
   --accent-hover: #d4d4d4;
   --border: #ffffff;
@@ -346,6 +566,7 @@
   --shadow: none;
   --font-main: 'Arial Black', Impact, sans-serif;
   --radius: 0;
+  --card-border: #ffffff;
 }
 
 /* ---------- Neumorphism ---------- */
@@ -355,27 +576,31 @@
   --bg-card: #e0e5ec;
   --text-primary: #2d3748;
   --text-secondary: #4a5568;
+  --text-muted: #718096;
   --accent: #6366f1;
   --accent-hover: #818cf8;
   --border: transparent;
   --glow: none;
   --shadow: 8px 8px 16px #a3b1c6, -8px -8px 16px #ffffff;
   --radius: 16px;
+  --card-border: transparent;
 }
 
-/* ---------- Memphis Design ---------- */
+/* ---------- Memphis ---------- */
 [data-theme="memphis"] {
   --bg-primary: #fff1f2;
   --bg-secondary: #ffffff;
   --bg-card: rgba(255, 255, 255, 0.95);
   --text-primary: #1e1b4b;
   --text-secondary: #312e81;
+  --text-muted: #4c1d95;
   --accent: #e11d48;
   --accent-hover: #f43f5e;
   --border: #e11d48;
   --glow: rgba(225, 29, 72, 0.3);
   --shadow: 0 4px 16px rgba(225, 29, 72, 0.2);
   --radius: 4px;
+  --card-border: rgba(225, 29, 72, 0.22);
 }
 
 /* ---------- Bauhaus ---------- */
@@ -385,12 +610,14 @@
   --bg-card: #ffffff;
   --text-primary: #171717;
   --text-secondary: #404040;
+  --text-muted: #737373;
   --accent: #dc2626;
   --accent-hover: #ef4444;
   --border: #171717;
   --glow: none;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   --radius: 0;
+  --card-border: #171717;
 }
 
 /* ---------- Art Deco ---------- */
@@ -400,12 +627,14 @@
   --bg-card: rgba(20, 20, 20, 0.95);
   --text-primary: #fef3c7;
   --text-secondary: #fde68a;
+  --text-muted: #fcd34d;
   --accent: #d4af37;
   --accent-hover: #eab308;
   --border: #d4af37;
   --glow: rgba(212, 175, 55, 0.4);
   --shadow: 0 0 18px rgba(212, 175, 55, 0.3);
   --radius: 2px;
+  --card-border: rgba(212, 175, 55, 0.3);
 }
 
 /* ---------- Retrofuturismo ---------- */
@@ -415,11 +644,13 @@
   --bg-card: rgba(12, 24, 42, 0.95);
   --text-primary: #fef3c7;
   --text-secondary: #fde68a;
+  --text-muted: #fcd34d;
   --accent: #f59e0b;
   --accent-hover: #fbbf24;
   --border: #f59e0b;
   --glow: rgba(245, 158, 11, 0.4);
   --shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+  --card-border: rgba(245, 158, 11, 0.28);
 }
 
 /* ---------- Dark Academia ---------- */
@@ -429,11 +660,13 @@
   --bg-card: rgba(32, 24, 18, 0.95);
   --text-primary: #f5e6d3;
   --text-secondary: #e8d5b7;
+  --text-muted: #d4b894;
   --accent: #c4a484;
   --accent-hover: #d4b494;
   --border: #c4a484;
   --glow: rgba(196, 164, 132, 0.3);
   --shadow: 0 0 16px rgba(196, 164, 132, 0.2);
+  --card-border: rgba(196, 164, 132, 0.28);
 }
 
 /* ---------- Light Academia ---------- */
@@ -443,11 +676,13 @@
   --bg-card: rgba(255, 252, 245, 0.95);
   --text-primary: #3d2b1f;
   --text-secondary: #5c4033;
+  --text-muted: #7a5c45;
   --accent: #8b5a2b;
   --accent-hover: #a67c52;
   --border: #8b5a2b;
   --glow: rgba(139, 90, 43, 0.2);
   --shadow: 0 4px 16px rgba(139, 90, 43, 0.1);
+  --card-border: rgba(139, 90, 43, 0.22);
 }
 
 /* ---------- Cottagecore ---------- */
@@ -457,12 +692,14 @@
   --bg-card: rgba(250, 246, 239, 0.95);
   --text-primary: #3f2e1e;
   --text-secondary: #5c4033;
+  --text-muted: #7a5c45;
   --accent: #a67c52;
   --accent-hover: #c4a484;
   --border: #a67c52;
   --glow: rgba(166, 124, 82, 0.25);
   --shadow: 0 4px 16px rgba(166, 124, 82, 0.12);
   --radius: 12px;
+  --card-border: rgba(166, 124, 82, 0.22);
 }
 
 /* ---------- Dreamcore ---------- */
@@ -472,11 +709,13 @@
   --bg-card: rgba(22, 26, 48, 0.95);
   --text-primary: #fce7f3;
   --text-secondary: #fbcfe8;
+  --text-muted: #f9a8d4;
   --accent: #e94560;
   --accent-hover: #f43f5e;
   --border: #e94560;
   --glow: rgba(233, 69, 96, 0.4);
   --shadow: 0 0 20px rgba(233, 69, 96, 0.3);
+  --card-border: rgba(233, 69, 96, 0.28);
 }
 
 /* ---------- Weirdcore ---------- */
@@ -486,11 +725,13 @@
   --bg-card: rgba(18, 18, 18, 0.95);
   --text-primary: #f0f0f0;
   --text-secondary: #d4d4d4;
+  --text-muted: #a3a3a3;
   --accent: #c026d3;
   --accent-hover: #d946ef;
   --border: #c026d3;
   --glow: rgba(192, 38, 211, 0.45);
   --shadow: 0 0 20px rgba(192, 38, 211, 0.35);
+  --card-border: rgba(192, 38, 211, 0.3);
 }
 
 /* ---------- Liminal Space ---------- */
@@ -500,12 +741,14 @@
   --bg-card: rgba(45, 45, 45, 0.95);
   --text-primary: #e5e5e5;
   --text-secondary: #a3a3a3;
+  --text-muted: #737373;
   --accent: #a3a3a3;
   --accent-hover: #d4d4d4;
   --border: #737373;
   --glow: none;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   --radius: 2px;
+  --card-border: rgba(115, 115, 115, 0.4);
 }
 
 /* ---------- Biopunk ---------- */
@@ -515,11 +758,13 @@
   --bg-card: rgba(14, 28, 14, 0.95);
   --text-primary: #ecfdf5;
   --text-secondary: #a7f3d0;
+  --text-muted: #6ee7b7;
   --accent: #22c55e;
   --accent-hover: #4ade80;
   --border: #22c55e;
   --glow: rgba(34, 197, 94, 0.4);
   --shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+  --card-border: rgba(34, 197, 94, 0.28);
 }
 
 /* ---------- Techwear ---------- */
@@ -529,12 +774,14 @@
   --bg-card: rgba(16, 16, 16, 0.95);
   --text-primary: #e0f2fe;
   --text-secondary: #bae6fd;
+  --text-muted: #7dd3fc;
   --accent: #06b6d4;
   --accent-hover: #22d3ee;
   --border: #06b6d4;
   --glow: rgba(6, 182, 212, 0.4);
   --shadow: 0 0 18px rgba(6, 182, 212, 0.3);
   --radius: 4px;
+  --card-border: rgba(6, 182, 212, 0.28);
 }
 
 /* ---------- Corporate Memphis ---------- */
@@ -544,12 +791,14 @@
   --bg-card: #ffffff;
   --text-primary: #1e293b;
   --text-secondary: #475569;
+  --text-muted: #64748b;
   --accent: #3b82f6;
   --accent-hover: #60a5fa;
   --border: #3b82f6;
   --glow: rgba(59, 130, 246, 0.25);
   --shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
   --radius: 12px;
+  --card-border: rgba(59, 130, 246, 0.22);
 }
 
 /* ---------- Skeuomorphism ---------- */
@@ -559,12 +808,14 @@
   --bg-card: rgba(232, 217, 181, 0.95);
   --text-primary: #3d2b1f;
   --text-secondary: #5c4033;
+  --text-muted: #7a5c45;
   --accent: #8b4513;
   --accent-hover: #a0522d;
   --border: #8b4513;
   --glow: rgba(139, 69, 19, 0.3);
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   --radius: 8px;
+  --card-border: rgba(139, 69, 19, 0.28);
 }
 
 /* ---------- Minimalismo Escandinavo ---------- */
@@ -574,12 +825,14 @@
   --bg-card: #ffffff;
   --text-primary: #1a1a1a;
   --text-secondary: #525252;
+  --text-muted: #737373;
   --accent: #404040;
   --accent-hover: #262626;
   --border: #d4d4d4;
   --glow: none;
   --shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   --radius: 6px;
+  --card-border: #e5e5e5;
 }
 
 /* ---------- Maximalismo ---------- */
@@ -589,11 +842,13 @@
   --bg-card: rgba(30, 0, 55, 0.95);
   --text-primary: #fdf4ff;
   --text-secondary: #f5d0fe;
+  --text-muted: #e879f9;
   --accent: #e879f9;
   --accent-hover: #f0abfc;
   --border: #e879f9;
   --glow: rgba(232, 121, 249, 0.55);
   --shadow: 0 0 26px rgba(232, 121, 249, 0.45);
+  --card-border: rgba(232, 121, 249, 0.32);
 }
 
 /* ---------- Ukiyo-e Moderno ---------- */
@@ -603,11 +858,13 @@
   --bg-card: rgba(30, 22, 18, 0.95);
   --text-primary: #fef3c7;
   --text-secondary: #fde68a;
+  --text-muted: #fcd34d;
   --accent: #dc2626;
   --accent-hover: #ef4444;
   --border: #dc2626;
   --glow: rgba(220, 38, 38, 0.4);
   --shadow: 0 0 18px rgba(220, 38, 38, 0.3);
+  --card-border: rgba(220, 38, 38, 0.3);
 }
 
 /* ---------- Cyber Y2K ---------- */
@@ -617,10 +874,158 @@
   --bg-card: rgba(12, 12, 12, 0.95);
   --text-primary: #ecfeff;
   --text-secondary: #a5f3fc;
+  --text-muted: #67e8f9;
   --accent: #22d3ee;
   --accent-hover: #67e8f9;
   --border: #22d3ee;
   --glow: rgba(34, 211, 238, 0.6);
   --shadow: 0 0 28px rgba(34, 211, 238, 0.5);
   --radius: 12px;
+  --card-border: rgba(34, 211, 238, 0.32);
+}
+
+/* =====================================================
+   UTILIDADES DE LEGIBILIDAD Y COMPONENTES
+   ===================================================== */
+
+/* Texto sobre cualquier fondo con imagen */
+.text-on-image {
+  text-shadow: var(--text-shadow-strong);
+}
+
+.text-on-image-soft {
+  text-shadow: var(--text-shadow-medium);
+}
+
+/* Título con glow (compatible con todos los temas) */
+.title-glow {
+  color: var(--accent);
+  text-shadow:
+    0 0 6px var(--glow),
+    0 0 14px var(--glow),
+    0 0 28px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Rainbow específico – títulos y acentos con arcoíris real */
+[data-theme="rainbow"] .title-glow,
+[data-theme="rainbow"] .rainbow-text {
+  background: var(--rainbow-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 8px rgba(255, 0, 60, 0.5));
+}
+
+[data-theme="rainbow"] .rainbow-border {
+  border-image: var(--rainbow-gradient) 1;
+  border-width: 2px;
+  border-style: solid;
+}
+
+[data-theme="rainbow"] .rainbow-glow {
+  box-shadow: var(--rainbow-glow);
+}
+
+[data-theme="rainbow"] .rainbow-bg {
+  background: var(--rainbow-gradient);
+}
+
+/* Cards limpios y legibles */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Botones base profesionales */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.7rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #ffffff;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.btn:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Botón outline */
+.btn-outline {
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--border);
+}
+
+.btn-outline:hover {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* Focus global accesible */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Texto secundario y muted */
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* Separadores sutiles */
+.divider {
+  height: 1px;
+  background: var(--card-border);
+  border: none;
+  margin: var(--space-4) 0;
+}
+
+/* Scrollbar minimalista (opcional) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-full);
+  opacity: 0.6;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  opacity: 1;
 }
