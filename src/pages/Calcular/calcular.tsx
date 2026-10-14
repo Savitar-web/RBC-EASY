@@ -1,6 +1,6 @@
 /**
  * pages/Calcular/Calcular.tsx
- * Calculadora científica — TS válido, Electrostática/Gauss, √∛∜, historial transparente.
+ * Calculadora científica — glassmorphism, teclado grande, √∛∜, historial transparente.
  */
 
 import {
@@ -96,8 +96,11 @@ function stripFormatting(s: string): string { return s.replace(/,/g, ''); }
 function safeEval(expr: string, angleMode: 'DEG' | 'RAD' = 'DEG'): number {
   let s = stripFormatting(expr)
     .replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/·/g, '*')
-    .replace(/\^/g, '**').replace(/π/g, String(Math.PI)).replace(/\be\b/g, String(Math.E))
-    .replace(/∛/g, 'cbrt').replace(/∜/g, 'root4').replace(/√/g, 'sqrt').trim();
+    .replace(/[{[]/g, '(').replace(/[}\]]/g, ')')
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+√\(/g, (m) => `root(${fromSup(m.slice(0, -2))},`)
+    .replace(/∛\(/g, 'root(3,').replace(/∜\(/g, 'root(4,').replace(/√\(/g, 'root(2,')
+    .replace(/∛/g, 'root(3,').replace(/∜/g, 'root(4,').replace(/√/g, 'root(2,')
+    .replace(/\^/g, '**').replace(/π/g, String(Math.PI)).replace(/\be\b/g, String(Math.E)).trim();
   if (!s) throw new Error('Expresión vacía');
   s = s.replace(/(\d|\))\s*(?=\()/g, '$1*');
   s = s.replace(/(\d|\))\s*(?=[a-zA-Z_])/g, '$1*');
@@ -109,7 +112,6 @@ function safeEval(expr: string, angleMode: 'DEG' | 'RAD' = 'DEG'): number {
   const fromRad = angleMode === 'DEG' ? (x: number) => (x * 180) / Math.PI : (x: number) => x;
   const fns: Record<string, (...a: number[]) => number> = {
     sqrt: Math.sqrt, cbrt: Math.cbrt,
-    root4: (x: number) => Math.sign(x) * Math.abs(x) ** 0.25,
     abs: Math.abs,
     sin: (x) => Math.sin(toRad(x)), cos: (x) => Math.cos(toRad(x)), tan: (x) => Math.tan(toRad(x)),
     asin: (x) => fromRad(Math.asin(x)), acos: (x) => fromRad(Math.acos(x)), atan: (x) => fromRad(Math.atan(x)),
@@ -1472,10 +1474,893 @@ const OPERATIONS: SciOp[] = [
       { key: 'x', label: 'Valor' }
     ],
     compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'lbf2n') return { result: x * 4.44822, unit: 'N' }; return { result: x / 4.44822, unit: 'lbf' }; },
+  },
+  {
+    id: 'bernoulli',
+    name: 'Ecuación de Bernoulli',
+    category: 'Física',
+    formula: 'P + ½ρv² + ρgh',
+    description: 'Suma de presión, energía cinética y potencial por unidad de volumen.',
+    fields: [
+      { key: 'P', label: 'Presión', unit: 'Pa' },
+      { key: 'rho', label: 'Densidad ρ', unit: 'kg/m³' },
+      { key: 'v', label: 'Velocidad', unit: 'm/s' },
+      { key: 'h', label: 'Altura', unit: 'm' },
+      { key: 'g', label: 'g', unit: 'm/s²', defaultValue: '9.80665' }
+    ],
+    compute: (v) => { const rho = num(v.rho, 'ρ'); return { result: num(v.P, 'P') + 0.5 * rho * num(v.v, 'v') ** 2 + rho * num(v.g, 'g') * num(v.h, 'h'), unit: 'Pa' }; },
+  },
+  {
+    id: 'continuidad',
+    name: 'Ecuación de continuidad',
+    category: 'Física',
+    formula: 'A₁v₁ = A₂v₂',
+    description: 'Velocidad en la sección 2 de un fluido incompresible.',
+    fields: [
+      { key: 'A1', label: 'Área 1', unit: 'm²' },
+      { key: 'v1', label: 'Velocidad 1', unit: 'm/s' },
+      { key: 'A2', label: 'Área 2', unit: 'm²' }
+    ],
+    compute: (v) => { const A2 = num(v.A2, 'A2'); if (A2 === 0) throw new Error('A₂ no puede ser 0'); return { result: (num(v.A1, 'A1') * num(v.v1, 'v1')) / A2, unit: 'm/s' }; },
+  },
+  {
+    id: 'hidrostatica',
+    name: 'Presión hidrostática',
+    category: 'Física',
+    formula: 'P = ρ g h',
+    description: 'Presión debida a una columna de fluido.',
+    fields: [
+      { key: 'rho', label: 'Densidad ρ', unit: 'kg/m³' },
+      { key: 'h', label: 'Profundidad', unit: 'm' },
+      { key: 'g', label: 'g', unit: 'm/s²', defaultValue: '9.80665' }
+    ],
+    compute: (v) => ({ result: num(v.rho, 'ρ') * num(v.g, 'g') * num(v.h, 'h'), unit: 'Pa' }),
+  },
+  {
+    id: 'arquimedes',
+    name: 'Empuje de Arquímedes',
+    category: 'Física',
+    formula: 'E = ρ g V',
+    description: 'Fuerza de flotación igual al peso del fluido desalojado.',
+    fields: [
+      { key: 'rho', label: 'Densidad del fluido', unit: 'kg/m³', defaultValue: '1000' },
+      { key: 'V', label: 'Volumen sumergido', unit: 'm³' },
+      { key: 'g', label: 'g', unit: 'm/s²', defaultValue: '9.80665' }
+    ],
+    compute: (v) => ({ result: num(v.rho, 'ρ') * num(v.g, 'g') * num(v.V, 'V'), unit: 'N' }),
+  },
+  {
+    id: 'inercia-cilindro',
+    name: 'Inercia de cilindro (eje)',
+    category: 'Física',
+    formula: 'I = ½ m r²',
+    description: 'Momento de inercia de un cilindro sólido respecto a su eje.',
+    fields: [
+      { key: 'm', label: 'Masa', unit: 'kg' },
+      { key: 'r', label: 'Radio', unit: 'm' }
+    ],
+    compute: (v) => ({ result: 0.5 * num(v.m, 'm') * num(v.r, 'r') ** 2, unit: 'kg·m²' }),
+  },
+  {
+    id: 'inercia-esfera',
+    name: 'Inercia de esfera sólida',
+    category: 'Física',
+    formula: 'I = ⅖ m r²',
+    description: 'Momento de inercia de una esfera sólida respecto a un diámetro.',
+    fields: [
+      { key: 'm', label: 'Masa', unit: 'kg' },
+      { key: 'r', label: 'Radio', unit: 'm' }
+    ],
+    compute: (v) => ({ result: 0.4 * num(v.m, 'm') * num(v.r, 'r') ** 2, unit: 'kg·m²' }),
+  },
+  {
+    id: 'energia-rot',
+    name: 'Energía cinética rotacional',
+    category: 'Física',
+    formula: 'E = ½ I ω²',
+    description: 'Energía asociada a la rotación.',
+    fields: [
+      { key: 'I', label: 'Inercia I', unit: 'kg·m²' },
+      { key: 'w', label: 'Velocidad angular ω', unit: 'rad/s' }
+    ],
+    compute: (v) => ({ result: 0.5 * num(v.I, 'I') * num(v.w, 'ω') ** 2, unit: 'J' }),
+  },
+  {
+    id: 'omega',
+    name: 'Velocidad angular',
+    category: 'Física',
+    formula: 'ω = 2π f',
+    description: 'Velocidad angular a partir de la frecuencia.',
+    fields: [{ key: 'f', label: 'Frecuencia', unit: 'Hz' }],
+    compute: (v) => ({ result: 2 * Math.PI * num(v.f, 'f'), unit: 'rad/s' }),
+  },
+  {
+    id: 'alfa',
+    name: 'Aceleración angular',
+    category: 'Física',
+    formula: 'α = Δω / Δt',
+    description: 'Cambio de velocidad angular por unidad de tiempo.',
+    fields: [
+      { key: 'w', label: 'ω final', unit: 'rad/s' },
+      { key: 'w0', label: 'ω inicial', unit: 'rad/s', defaultValue: '0' },
+      { key: 't', label: 'Tiempo', unit: 's' }
+    ],
+    compute: (v) => { const t = num(v.t, 't'); if (t === 0) throw new Error('t no puede ser 0'); return { result: (num(v.w, 'ω') - num(v.w0, 'ω0')) / t, unit: 'rad/s²' }; },
+  },
+  {
+    id: 'momento-angular',
+    name: 'Momento angular',
+    category: 'Física',
+    formula: 'L = I ω',
+    description: 'Momento angular de un cuerpo rígido.',
+    fields: [
+      { key: 'I', label: 'Inercia I', unit: 'kg·m²' },
+      { key: 'w', label: 'ω', unit: 'rad/s' }
+    ],
+    compute: (v) => ({ result: num(v.I, 'I') * num(v.w, 'ω'), unit: 'kg·m²/s' }),
+  },
+  {
+    id: 'potencia-vi',
+    name: 'Potencia eléctrica (VI)',
+    category: 'Física',
+    formula: 'P = V I',
+    description: 'Potencia en un elemento de circuito.',
+    fields: [
+      { key: 'V', label: 'Voltaje', unit: 'V' },
+      { key: 'I', label: 'Corriente', unit: 'A' }
+    ],
+    compute: (v) => ({ result: num(v.V, 'V') * num(v.I, 'I'), unit: 'W' }),
+  },
+  {
+    id: 'potencia-i2r',
+    name: 'Potencia disipada (I²R)',
+    category: 'Física',
+    formula: 'P = I² R',
+    description: 'Potencia convertida en calor en una resistencia.',
+    fields: [
+      { key: 'I', label: 'Corriente', unit: 'A' },
+      { key: 'R', label: 'Resistencia', unit: 'Ω' }
+    ],
+    compute: (v) => ({ result: num(v.I, 'I') ** 2 * num(v.R, 'R'), unit: 'W' }),
+  },
+  {
+    id: 'resistividad',
+    name: 'Resistencia por resistividad',
+    category: 'Física',
+    formula: 'R = ρ L / A',
+    description: 'Resistencia de un conductor uniforme.',
+    fields: [
+      { key: 'rho', label: 'Resistividad ρ', unit: 'Ω·m' },
+      { key: 'L', label: 'Longitud', unit: 'm' },
+      { key: 'A', label: 'Área', unit: 'm²' }
+    ],
+    compute: (v) => { const A = num(v.A, 'A'); if (A === 0) throw new Error('A no puede ser 0'); return { result: (num(v.rho, 'ρ') * num(v.L, 'L')) / A, unit: 'Ω' }; },
+  },
+  {
+    id: 'lorentz',
+    name: 'Fuerza de Lorentz (magnética)',
+    category: 'Física',
+    formula: 'F = |q| v B sinθ',
+    description: 'Fuerza sobre una carga en un campo magnético.',
+    fields: [
+      { key: 'q', label: 'Carga', unit: 'C' },
+      { key: 'v', label: 'Velocidad', unit: 'm/s' },
+      { key: 'B', label: 'Campo B', unit: 'T' },
+      { key: 'theta', label: 'Ángulo', unit: '°', defaultValue: '90' }
+    ],
+    compute: (v) => ({ result: Math.abs(num(v.q, 'q')) * num(v.v, 'v') * num(v.B, 'B') * Math.sin((num(v.theta, 'θ') * Math.PI) / 180), unit: 'N' }),
+  },
+  {
+    id: 'lc',
+    name: 'Frecuencia de resonancia LC',
+    category: 'Física',
+    formula: 'f = 1 / (2π√(LC))',
+    description: 'Frecuencia natural de un circuito LC ideal.',
+    fields: [
+      { key: 'L', label: 'Inductancia', unit: 'H' },
+      { key: 'C', label: 'Capacitancia', unit: 'F' }
+    ],
+    compute: (v) => { const p = num(v.L, 'L') * num(v.C, 'C'); if (p <= 0) throw new Error('LC debe ser > 0'); return { result: 1 / (2 * Math.PI * Math.sqrt(p)), unit: 'Hz' }; },
+  },
+  {
+    id: 'tau-rc',
+    name: 'Constante de tiempo RC',
+    category: 'Física',
+    formula: 'τ = R C',
+    description: 'Tiempo característico de carga o descarga.',
+    fields: [
+      { key: 'R', label: 'Resistencia', unit: 'Ω' },
+      { key: 'C', label: 'Capacitancia', unit: 'F' }
+    ],
+    compute: (v) => ({ result: num(v.R, 'R') * num(v.C, 'C'), unit: 's' }),
+  },
+  {
+    id: 'lambda',
+    name: 'Longitud de onda',
+    category: 'Física',
+    formula: 'λ = v / f',
+    description: 'Longitud de onda. Usa v = c si es luz en el vacío.',
+    fields: [
+      { key: 'v', label: 'Velocidad', unit: 'm/s', defaultValue: '299792458' },
+      { key: 'f', label: 'Frecuencia', unit: 'Hz' }
+    ],
+    compute: (v) => { const f = num(v.f, 'f'); if (f === 0) throw new Error('f no puede ser 0'); return { result: num(v.v, 'v') / f, unit: 'm' }; },
+  },
+  {
+    id: 'indice-refraccion',
+    name: 'Índice de refracción',
+    category: 'Física',
+    formula: 'n = c / v',
+    description: 'Índice absoluto de un medio.',
+    fields: [{ key: 'v', label: 'Velocidad en el medio', unit: 'm/s' }],
+    compute: (v) => { const vel = num(v.v, 'v'); if (vel === 0) throw new Error('v no puede ser 0'); return { result: C.c / vel, unit: '' }; },
+  },
+  {
+    id: 'wien',
+    name: 'Ley de Wien',
+    category: 'Física',
+    formula: 'λ_max T = 2.897×10⁻³',
+    description: 'Longitud de onda del pico de emisión de un cuerpo negro.',
+    fields: [{ key: 'T', label: 'Temperatura', unit: 'K' }],
+    compute: (v) => { const T = num(v.T, 'T'); if (T === 0) throw new Error('T no puede ser 0'); return { result: 2.897e-3 / T, unit: 'm' }; },
+  },
+  {
+    id: 'frenado',
+    name: 'Distancia de frenado',
+    category: 'Física',
+    formula: 'd = v² / (2a)',
+    description: 'Distancia para detenerse con desaceleración constante a.',
+    fields: [
+      { key: 'v', label: 'Velocidad', unit: 'm/s' },
+      { key: 'a', label: 'Desaceleración', unit: 'm/s²' }
+    ],
+    compute: (v) => { const a = num(v.a, 'a'); if (a === 0) throw new Error('a no puede ser 0'); return { result: (num(v.v, 'v') ** 2) / (2 * Math.abs(a)), unit: 'm' }; },
+  },
+  {
+    id: 'sigma-esfera',
+    name: 'Densidad superficial (esfera)',
+    category: 'Electrostática',
+    formula: 'σ = Q / (4πR²)',
+    description: 'Densidad superficial uniforme sobre una esfera.',
+    fields: [
+      { key: 'Q', label: 'Carga Q', unit: 'C' },
+      { key: 'R', label: 'Radio R', unit: 'm' }
+    ],
+    compute: (v) => { const R = num(v.R, 'R'); if (R === 0) throw new Error('R no puede ser 0'); return { result: num(v.Q, 'Q') / (4 * Math.PI * R * R), unit: 'C/m²' }; },
+  },
+  {
+    id: 'potencial-esfera',
+    name: 'Potencial de esfera conductora',
+    category: 'Electrostática',
+    formula: 'V = kQ / R',
+    description: 'Potencial en la superficie (y en el interior) de una esfera conductora.',
+    fields: [
+      { key: 'Q', label: 'Carga Q', unit: 'C' },
+      { key: 'R', label: 'Radio R', unit: 'm' }
+    ],
+    compute: (v) => { const R = num(v.R, 'R'); if (R === 0) throw new Error('R no puede ser 0'); return { result: (8.9875517923e9 * num(v.Q, 'Q')) / R, unit: 'V' }; },
+  },
+  {
+    id: 'campo-conductor',
+    name: 'Campo dentro de un conductor',
+    category: 'Electrostática',
+    formula: 'E = 0',
+    description: 'En equilibrio electrostático el campo en el interior de un conductor es cero. El flujo y la carga neta interior también lo son.',
+    fields: [{ key: 'nota', label: 'Confirmación (escribe 1)', defaultValue: '1' }],
+    compute: () => ({ result: 0, unit: 'N/C', detail: 'E = 0 en el interior. Φ = 0 y Qenc = 0.' }),
+  },
+  {
+    id: 'flujo-esfera-q',
+    name: 'Flujo de una esfera con carga Q',
+    category: 'Electrostática',
+    formula: 'Φ = Q / ε₀',
+    description: 'El flujo total no depende del radio: solo de la carga encerrada.',
+    fields: [{ key: 'Q', label: 'Carga Q', unit: 'C' }],
+    compute: (v) => ({ result: num(v.Q, 'Q') / C.epsilon0, unit: 'N·m²/C', detail: 'Gauss: ∮E·dA = Qenc/ε₀' }),
+  },
+  {
+    id: 'cap-esfera',
+    name: 'Capacitancia de esfera aislada',
+    category: 'Electrostática',
+    formula: 'C = 4π ε₀ R',
+    description: 'Capacitancia de un conductor esférico aislado.',
+    fields: [{ key: 'R', label: 'Radio R', unit: 'm' }],
+    compute: (v) => ({ result: 4 * Math.PI * C.epsilon0 * num(v.R, 'R'), unit: 'F' }),
+  },
+  {
+    id: 'energia-capacitor',
+    name: 'Energía de un capacitor',
+    category: 'Electrostática',
+    formula: 'U = ½ C V²',
+    description: 'Energía almacenada en un condensador.',
+    fields: [
+      { key: 'C', label: 'Capacitancia', unit: 'F' },
+      { key: 'V', label: 'Voltaje', unit: 'V' }
+    ],
+    compute: (v) => ({ result: 0.5 * num(v.C, 'C') * num(v.V, 'V') ** 2, unit: 'J' }),
+  },
+  {
+    id: 'cap-serie',
+    name: 'Capacitores en serie',
+    category: 'Electrostática',
+    formula: '1/C = 1/C₁ + 1/C₂',
+    description: 'Capacitancia equivalente de dos condensadores en serie.',
+    fields: [
+      { key: 'c1', label: 'C₁', unit: 'F' },
+      { key: 'c2', label: 'C₂', unit: 'F' }
+    ],
+    compute: (v) => { const c1 = num(v.c1, 'C1'); const c2 = num(v.c2, 'C2'); if (c1 === 0 || c2 === 0) throw new Error('C no puede ser 0'); return { result: (c1 * c2) / (c1 + c2), unit: 'F' }; },
+  },
+  {
+    id: 'cap-paralelo',
+    name: 'Capacitores en paralelo',
+    category: 'Electrostática',
+    formula: 'C = C₁ + C₂ + C₃',
+    description: 'Capacitancia equivalente en paralelo.',
+    fields: [
+      { key: 'c1', label: 'C₁', unit: 'F' },
+      { key: 'c2', label: 'C₂', unit: 'F', defaultValue: '0' },
+      { key: 'c3', label: 'C₃', unit: 'F', defaultValue: '0' }
+    ],
+    compute: (v) => ({ result: num(v.c1, 'C1') + num(v.c2, 'C2') + num(v.c3, 'C3'), unit: 'F' }),
+  },
+  {
+    id: 'densidad-energia-e',
+    name: 'Densidad de energía del campo',
+    category: 'Electrostática',
+    formula: 'u = ½ ε₀ E²',
+    description: 'Energía por unidad de volumen almacenada en un campo eléctrico.',
+    fields: [{ key: 'E', label: 'Campo E', unit: 'N/C' }],
+    compute: (v) => ({ result: 0.5 * C.epsilon0 * num(v.E, 'E') ** 2, unit: 'J/m³' }),
+  },
+  {
+    id: 'voltaje-uniforme',
+    name: 'Potencial en campo uniforme',
+    category: 'Electrostática',
+    formula: 'V = E d',
+    description: 'Diferencia de potencial entre dos puntos separados una distancia d paralela a E.',
+    fields: [
+      { key: 'E', label: 'Campo E', unit: 'N/C' },
+      { key: 'd', label: 'Distancia', unit: 'm' }
+    ],
+    compute: (v) => ({ result: num(v.E, 'E') * num(v.d, 'd'), unit: 'V' }),
+  },
+  {
+    id: 'dipolo',
+    name: 'Momento dipolar',
+    category: 'Electrostática',
+    formula: 'p = q d',
+    description: 'Momento de un dipolo eléctrico.',
+    fields: [
+      { key: 'q', label: 'Carga q', unit: 'C' },
+      { key: 'd', label: 'Separación', unit: 'm' }
+    ],
+    compute: (v) => ({ result: Math.abs(num(v.q, 'q')) * num(v.d, 'd'), unit: 'C·m' }),
+  },
+  {
+    id: 'campo-dipolo-axial',
+    name: 'Campo de dipolo (eje)',
+    category: 'Electrostática',
+    formula: 'E ≈ 2 k p / r³',
+    description: 'Campo en el eje de un dipolo, lejos del dipolo (r ≫ d).',
+    fields: [
+      { key: 'p', label: 'Momento p', unit: 'C·m' },
+      { key: 'r', label: 'Distancia r', unit: 'm' }
+    ],
+    compute: (v) => { const r = num(v.r, 'r'); if (r === 0) throw new Error('r no puede ser 0'); return { result: (2 * 8.9875517923e9 * num(v.p, 'p')) / (r ** 3), unit: 'N/C' }; },
+  },
+  {
+    id: 'fuerza-placas',
+    name: 'Fuerza entre placas',
+    category: 'Electrostática',
+    formula: 'F = ½ ε₀ A E²',
+    description: 'Atracción entre las placas de un condensador de campo uniforme.',
+    fields: [
+      { key: 'A', label: 'Área', unit: 'm²' },
+      { key: 'E', label: 'Campo E', unit: 'N/C' }
+    ],
+    compute: (v) => ({ result: 0.5 * C.epsilon0 * num(v.A, 'A') * num(v.E, 'E') ** 2, unit: 'N' }),
+  },
+  {
+    id: 'gauss-linea',
+    name: 'Gauss: línea infinita',
+    category: 'Electrostática',
+    formula: 'E = λ / (2π ε₀ r)',
+    description: 'Campo de una línea infinita. Equivale a E = 2kλ/r.',
+    fields: [
+      { key: 'lambda', label: 'Densidad λ', unit: 'C/m' },
+      { key: 'r', label: 'Distancia r', unit: 'm' }
+    ],
+    compute: (v) => { const r = num(v.r, 'r'); if (r === 0) throw new Error('r no puede ser 0'); return { result: num(v.lambda, 'λ') / (2 * Math.PI * C.epsilon0 * r), unit: 'N/C' }; },
+  },
+  {
+    id: 'arrhenius',
+    name: 'Ecuación de Arrhenius',
+    category: 'Química',
+    formula: 'k = A e^(−Ea/RT)',
+    description: 'Constante de velocidad en función de la temperatura.',
+    fields: [
+      { key: 'A', label: 'Factor A' },
+      { key: 'Ea', label: 'Ea', unit: 'J/mol' },
+      { key: 'T', label: 'Temperatura', unit: 'K' }
+    ],
+    compute: (v) => { const T = num(v.T, 'T'); if (T === 0) throw new Error('T no puede ser 0'); return { result: num(v.A, 'A') * Math.exp(-num(v.Ea, 'Ea') / (C.R * T)), unit: '' }; },
+  },
+  {
+    id: 'semivida',
+    name: 'Semivida (1.er orden)',
+    category: 'Química',
+    formula: 't½ = ln(2) / k',
+    description: 'Tiempo de vida media de una reacción de primer orden.',
+    fields: [{ key: 'k', label: 'Constante k', unit: '1/s' }],
+    compute: (v) => { const k = num(v.k, 'k'); if (k === 0) throw new Error('k no puede ser 0'); return { result: Math.LN2 / k, unit: 's' }; },
+  },
+  {
+    id: 'henderson',
+    name: 'Henderson–Hasselbalch',
+    category: 'Química',
+    formula: 'pH = pKa + log([A⁻]/[HA])',
+    description: 'pH de una disolución amortiguadora.',
+    fields: [
+      { key: 'pKa', label: 'pKa' },
+      { key: 'A', label: '[A⁻]', unit: 'mol/L' },
+      { key: 'HA', label: '[HA]', unit: 'mol/L' }
+    ],
+    compute: (v) => { const HA = num(v.HA, 'HA'); const A = num(v.A, 'A'); if (HA <= 0 || A <= 0) throw new Error('Concentraciones > 0'); return { result: num(v.pKa, 'pKa') + Math.log10(A / HA), unit: '' }; },
+  },
+  {
+    id: 'pka',
+    name: 'pKa desde Ka',
+    category: 'Química',
+    formula: 'pKa = −log₁₀(Ka)',
+    description: 'Constante de acidez en escala logarítmica.',
+    fields: [{ key: 'Ka', label: 'Ka' }],
+    compute: (v) => { const Ka = num(v.Ka, 'Ka'); if (Ka <= 0) throw new Error('Ka > 0'); return { result: -Math.log10(Ka), unit: '' }; },
+  },
+  {
+    id: 'crioscopico',
+    name: 'Descenso crioscópico',
+    category: 'Química',
+    formula: 'ΔT = Kf · m · i',
+    description: 'Disminución del punto de congelación.',
+    fields: [
+      { key: 'Kf', label: 'Kf', unit: '°C·kg/mol' },
+      { key: 'm', label: 'Molalidad', unit: 'mol/kg' },
+      { key: 'i', label: 'Factor i', defaultValue: '1' }
+    ],
+    compute: (v) => ({ result: num(v.Kf, 'Kf') * num(v.m, 'm') * num(v.i, 'i'), unit: '°C' }),
+  },
+  {
+    id: 'ebulloscopico',
+    name: 'Aumento ebulloscópico',
+    category: 'Química',
+    formula: 'ΔT = Kb · m · i',
+    description: 'Aumento del punto de ebullición.',
+    fields: [
+      { key: 'Kb', label: 'Kb', unit: '°C·kg/mol' },
+      { key: 'm', label: 'Molalidad', unit: 'mol/kg' },
+      { key: 'i', label: 'Factor i', defaultValue: '1' }
+    ],
+    compute: (v) => ({ result: num(v.Kb, 'Kb') * num(v.m, 'm') * num(v.i, 'i'), unit: '°C' }),
+  },
+  {
+    id: 'osmotica',
+    name: 'Presión osmótica',
+    category: 'Química',
+    formula: 'π = i M R T',
+    description: 'Presión osmótica de una disolución.',
+    fields: [
+      { key: 'i', label: 'Factor i', defaultValue: '1' },
+      { key: 'M', label: 'Molaridad', unit: 'mol/L' },
+      { key: 'T', label: 'Temperatura', unit: 'K' }
+    ],
+    compute: (v) => ({ result: num(v.i, 'i') * num(v.M, 'M') * 0.082057 * num(v.T, 'T'), unit: 'atm', detail: 'R = 0.082057 L·atm/(mol·K)' }),
+  },
+  {
+    id: 'densidad-gas',
+    name: 'Densidad de gas ideal',
+    category: 'Química',
+    formula: 'ρ = P M / (R T)',
+    description: 'Densidad de un gas ideal. M en kg/mol da kg/m³.',
+    fields: [
+      { key: 'P', label: 'Presión', unit: 'Pa' },
+      { key: 'M', label: 'Masa molar', unit: 'kg/mol' },
+      { key: 'T', label: 'Temperatura', unit: 'K' }
+    ],
+    compute: (v) => { const T = num(v.T, 'T'); if (T === 0) throw new Error('T no puede ser 0'); return { result: (num(v.P, 'P') * num(v.M, 'M')) / (C.R * T), unit: 'kg/m³' }; },
+  },
+  {
+    id: 'delta-g-k',
+    name: 'ΔG° desde K',
+    category: 'Química',
+    formula: 'ΔG° = −RT ln K',
+    description: 'Energía libre estándar a partir de la constante de equilibrio.',
+    fields: [
+      { key: 'K', label: 'K' },
+      { key: 'T', label: 'Temperatura', unit: 'K', defaultValue: '298.15' }
+    ],
+    compute: (v) => { const K = num(v.K, 'K'); if (K <= 0) throw new Error('K > 0'); return { result: -C.R * num(v.T, 'T') * Math.log(K), unit: 'J/mol' }; },
+  },
+  {
+    id: 'k-desde-g',
+    name: 'K desde ΔG°',
+    category: 'Química',
+    formula: 'K = e^(−ΔG°/RT)',
+    description: 'Constante de equilibrio a partir de ΔG°.',
+    fields: [
+      { key: 'dG', label: 'ΔG°', unit: 'J/mol' },
+      { key: 'T', label: 'Temperatura', unit: 'K', defaultValue: '298.15' }
+    ],
+    compute: (v) => { const T = num(v.T, 'T'); if (T === 0) throw new Error('T no puede ser 0'); return { result: Math.exp(-num(v.dG, 'ΔG') / (C.R * T)), unit: '' }; },
+  },
+  {
+    id: 'masa-moles',
+    name: 'Masa desde moles',
+    category: 'Química',
+    formula: 'm = n M',
+    description: 'Masa de una muestra a partir de los moles.',
+    fields: [
+      { key: 'n', label: 'Moles', unit: 'mol' },
+      { key: 'M', label: 'Masa molar', unit: 'g/mol' }
+    ],
+    compute: (v) => ({ result: num(v.n, 'n') * num(v.M, 'M'), unit: 'g' }),
+  },
+  {
+    id: 'ley-velocidad',
+    name: 'Ley de velocidad',
+    category: 'Química',
+    formula: 'v = k [A]^m [B]^n',
+    description: 'Velocidad inicial de una reacción.',
+    fields: [
+      { key: 'k', label: 'k' },
+      { key: 'A', label: '[A]', unit: 'mol/L' },
+      { key: 'm', label: 'Orden m', defaultValue: '1' },
+      { key: 'B', label: '[B]', unit: 'mol/L', defaultValue: '1' },
+      { key: 'n', label: 'Orden n', defaultValue: '0' }
+    ],
+    compute: (v) => ({ result: num(v.k, 'k') * num(v.A, 'A') ** num(v.m, 'm') * num(v.B, 'B') ** num(v.n, 'n'), unit: 'mol/(L·s)' }),
+  },
+  {
+    id: 'porcentaje-v',
+    name: '% en volumen',
+    category: 'Química',
+    formula: '%v = (Vs/Vt)·100',
+    description: 'Porcentaje en volumen de una disolución.',
+    fields: [
+      { key: 'vs', label: 'Volumen soluto' },
+      { key: 'vt', label: 'Volumen total' }
+    ],
+    compute: (v) => { const vt = num(v.vt, 'vt'); if (vt === 0) throw new Error('Vt no puede ser 0'); return { result: (num(v.vs, 'vs') / vt) * 100, unit: '%' }; },
+  },
+  {
+    id: 'area-elipse',
+    name: 'Área de la elipse',
+    category: 'Matemáticas',
+    formula: 'A = π a b',
+    description: 'Área de una elipse de semiejes a y b.',
+    fields: [
+      { key: 'a', label: 'Semieje a' },
+      { key: 'b', label: 'Semieje b' }
+    ],
+    compute: (v) => ({ result: Math.PI * num(v.a, 'a') * num(v.b, 'b'), unit: 'u²' }),
+  },
+  {
+    id: 'sup-esfera',
+    name: 'Superficie de la esfera',
+    category: 'Matemáticas',
+    formula: 'S = 4 π r²',
+    description: 'Área de la superficie esférica.',
+    fields: [{ key: 'r', label: 'Radio' }],
+    compute: (v) => ({ result: 4 * Math.PI * num(v.r, 'r') ** 2, unit: 'u²' }),
+  },
+  {
+    id: 'vol-piramide',
+    name: 'Volumen de pirámide',
+    category: 'Matemáticas',
+    formula: 'V = ⅓ B h',
+    description: 'Volumen de una pirámide o cono a partir del área de la base.',
+    fields: [
+      { key: 'B', label: 'Área de la base' },
+      { key: 'h', label: 'Altura' }
+    ],
+    compute: (v) => ({ result: (num(v.B, 'B') * num(v.h, 'h')) / 3, unit: 'u³' }),
+  },
+  {
+    id: 'sector',
+    name: 'Área de sector circular',
+    category: 'Matemáticas',
+    formula: 'A = (θ/360) π r²',
+    description: 'Sector de ángulo central θ en grados.',
+    fields: [
+      { key: 'r', label: 'Radio' },
+      { key: 'theta', label: 'Ángulo', unit: '°' }
+    ],
+    compute: (v) => ({ result: (num(v.theta, 'θ') / 360) * Math.PI * num(v.r, 'r') ** 2, unit: 'u²' }),
+  },
+  {
+    id: 'cosenos',
+    name: 'Ley de cosenos',
+    category: 'Matemáticas',
+    formula: 'c² = a² + b² − 2ab cos C',
+    description: 'Lado c opuesto al ángulo C.',
+    fields: [
+      { key: 'a', label: 'Lado a' },
+      { key: 'b', label: 'Lado b' },
+      { key: 'C', label: 'Ángulo C', unit: '°' }
+    ],
+    compute: (v) => { const a = num(v.a, 'a'); const b = num(v.b, 'b'); const c2 = a * a + b * b - 2 * a * b * Math.cos((num(v.C, 'C') * Math.PI) / 180); if (c2 < 0) throw new Error('Resultado no real'); return { result: Math.sqrt(c2), unit: 'u' }; },
+  },
+  {
+    id: 'senos',
+    name: 'Ley de senos (lado)',
+    category: 'Matemáticas',
+    formula: 'a / sin A = b / sin B',
+    description: 'Calcula el lado a conocidos A, b y B.',
+    fields: [
+      { key: 'A', label: 'Ángulo A', unit: '°' },
+      { key: 'b', label: 'Lado b' },
+      { key: 'B', label: 'Ángulo B', unit: '°' }
+    ],
+    compute: (v) => { const sB = Math.sin((num(v.B, 'B') * Math.PI) / 180); if (sB === 0) throw new Error('sin B = 0'); return { result: (num(v.b, 'b') * Math.sin((num(v.A, 'A') * Math.PI) / 180)) / sB, unit: 'u' }; },
+  },
+  {
+    id: 'media',
+    name: 'Media aritmética (hasta 4)',
+    category: 'Matemáticas',
+    formula: 'x̄ = Σx / n',
+    description: 'Promedio. Deja en blanco los valores que no uses (se ignoran si están vacíos: usa 0 solo si quieres contarlo). Cuenta siempre los 4 campos.',
+    fields: [
+      { key: 'a', label: 'x1', defaultValue: '0' },
+      { key: 'b', label: 'x2', defaultValue: '0' },
+      { key: 'c', label: 'x3', defaultValue: '0' },
+      { key: 'd', label: 'x4', defaultValue: '0' },
+      { key: 'n', label: 'Cantidad n', defaultValue: '4' }
+    ],
+    compute: (v) => { const n = num(v.n, 'n'); if (n === 0) throw new Error('n no puede ser 0'); return { result: (num(v.a, 'x1') + num(v.b, 'x2') + num(v.c, 'x3') + num(v.d, 'x4')) / n, unit: '' }; },
+  },
+  {
+    id: 'media-geometrica',
+    name: 'Media geométrica (2)',
+    category: 'Matemáticas',
+    formula: 'G = √(a·b)',
+    description: 'Media geométrica de dos números positivos.',
+    fields: [
+      { key: 'a', label: 'a' },
+      { key: 'b', label: 'b' }
+    ],
+    compute: (v) => { const p = num(v.a, 'a') * num(v.b, 'b'); if (p < 0) throw new Error('Producto negativo'); return { result: Math.sqrt(p), unit: '' }; },
+  },
+  {
+    id: 'interes-simple',
+    name: 'Interés simple',
+    category: 'Matemáticas',
+    formula: 'I = P r t',
+    description: 'Interés simple. r en decimal (5% = 0.05).',
+    fields: [
+      { key: 'P', label: 'Capital' },
+      { key: 'r', label: 'Tasa decimal', placeholder: '0.05' },
+      { key: 't', label: 'Tiempo' }
+    ],
+    compute: (v) => ({ result: num(v.P, 'P') * num(v.r, 'r') * num(v.t, 't'), unit: '' }),
+  },
+  {
+    id: 'cambio-porcentual',
+    name: 'Cambio porcentual',
+    category: 'Matemáticas',
+    formula: 'Δ% = (nuevo − inicial) / inicial · 100',
+    description: 'Variación porcentual entre dos valores.',
+    fields: [
+      { key: 'a', label: 'Valor inicial' },
+      { key: 'b', label: 'Valor nuevo' }
+    ],
+    compute: (v) => { const a = num(v.a, 'a'); if (a === 0) throw new Error('Inicial no puede ser 0'); return { result: ((num(v.b, 'b') - a) / a) * 100, unit: '%' }; },
+  },
+  {
+    id: 'diagonales',
+    name: 'Diagonales de un polígono',
+    category: 'Matemáticas',
+    formula: 'D = n(n−3)/2',
+    description: 'Número de diagonales de un polígono de n lados.',
+    fields: [{ key: 'n', label: 'Lados n' }],
+    compute: (v) => ({ result: (num(v.n, 'n') * (num(v.n, 'n') - 3)) / 2, unit: '' }),
+  },
+  {
+    id: 'suma-geometrica',
+    name: 'Suma de progresión geométrica',
+    category: 'Matemáticas',
+    formula: 'S = a (rⁿ − 1) / (r − 1)',
+    description: 'Suma de n términos. Si r = 1, S = a·n.',
+    fields: [
+      { key: 'a', label: 'Primer término a' },
+      { key: 'r', label: 'Razón r' },
+      { key: 'n', label: 'Términos n' }
+    ],
+    compute: (v) => { const r = num(v.r, 'r'); const n = num(v.n, 'n'); const a = num(v.a, 'a'); if (r === 1) return { result: a * n, unit: '' }; return { result: (a * (r ** n - 1)) / (r - 1), unit: '' }; },
+  },
+  {
+    id: 'binomio',
+    name: 'Cuadrado de un binomio',
+    category: 'Matemáticas',
+    formula: '(a + b)² = a² + 2ab + b²',
+    description: 'Desarrollo del cuadrado de la suma.',
+    fields: [
+      { key: 'a', label: 'a' },
+      { key: 'b', label: 'b' }
+    ],
+    compute: (v) => { const a = num(v.a, 'a'); const b = num(v.b, 'b'); return { result: a * a + 2 * a * b + b * b, unit: '' }; },
+  },
+  {
+    id: 'recta',
+    name: 'Valor de una recta',
+    category: 'Matemáticas',
+    formula: 'y = m x + b',
+    description: 'Ordenada de una recta en el punto x.',
+    fields: [
+      { key: 'm', label: 'Pendiente m' },
+      { key: 'x', label: 'x' },
+      { key: 'b', label: 'Ordenada b', defaultValue: '0' }
+    ],
+    compute: (v) => ({ result: num(v.m, 'm') * num(v.x, 'x') + num(v.b, 'b'), unit: '' }),
+  },
+  {
+    id: 'heron',
+    name: 'Área por Herón',
+    category: 'Matemáticas',
+    formula: '√[s(s−a)(s−b)(s−c)]',
+    description: 'Área de un triángulo conocidos los tres lados.',
+    fields: [
+      { key: 'a', label: 'Lado a' },
+      { key: 'b', label: 'Lado b' },
+      { key: 'c', label: 'Lado c' }
+    ],
+    compute: (v) => { const a = num(v.a, 'a'); const b = num(v.b, 'b'); const c = num(v.c, 'c'); const s = (a + b + c) / 2; const k = s * (s - a) * (s - b) * (s - c); if (k < 0) throw new Error('No forman un triángulo'); return { result: Math.sqrt(k), unit: 'u²' }; },
+  },
+  {
+    id: 'yd-m',
+    name: 'yd ↔ m',
+    category: 'Conversiones',
+    formula: '1 yd = 0.9144 m',
+    description: 'Yardas y metros.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'yd2m', options: [{ value: 'yd2m', label: 'yd → m' }, { value: 'm2yd', label: 'm → yd' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'm2yd') return { result: x / 0.9144, unit: 'yd' }; return { result: x * 0.9144, unit: 'm' }; },
+  },
+  {
+    id: 'ft-m',
+    name: 'ft ↔ m',
+    category: 'Conversiones',
+    formula: '1 ft = 0.3048 m',
+    description: 'Pies y metros.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'ft2m', options: [{ value: 'ft2m', label: 'ft → m' }, { value: 'm2ft', label: 'm → ft' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'm2ft') return { result: x / 0.3048, unit: 'ft' }; return { result: x * 0.3048, unit: 'm' }; },
+  },
+  {
+    id: 'oz-g',
+    name: 'oz ↔ g',
+    category: 'Conversiones',
+    formula: '1 oz ≈ 28.3495 g',
+    description: 'Onzas (avoirdupois) y gramos.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'oz2g', options: [{ value: 'oz2g', label: 'oz → g' }, { value: 'g2oz', label: 'g → oz' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'g2oz') return { result: x / 28.3495, unit: 'oz' }; return { result: x * 28.3495, unit: 'g' }; },
+  },
+  {
+    id: 'gal-l',
+    name: 'gal (US) ↔ L',
+    category: 'Conversiones',
+    formula: '1 gal ≈ 3.78541 L',
+    description: 'Galón estadounidense y litros.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'gal2l', options: [{ value: 'gal2l', label: 'gal → L' }, { value: 'l2gal', label: 'L → gal' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'l2gal') return { result: x / 3.78541, unit: 'gal' }; return { result: x * 3.78541, unit: 'L' }; },
+  },
+  {
+    id: 'kcal-kj',
+    name: 'kcal ↔ kJ',
+    category: 'Conversiones',
+    formula: '1 kcal = 4.184 kJ',
+    description: 'Kilocalorías y kilojulios.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'kcal2kj', options: [{ value: 'kcal2kj', label: 'kcal → kJ' }, { value: 'kj2kcal', label: 'kJ → kcal' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'kj2kcal') return { result: x / 4.184, unit: 'kcal' }; return { result: x * 4.184, unit: 'kJ' }; },
+  },
+  {
+    id: 'torr-pa',
+    name: 'Torr ↔ Pa',
+    category: 'Conversiones',
+    formula: '1 Torr = 133.322 Pa',
+    description: 'Torr (mmHg) y pascales.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 't2p', options: [{ value: 't2p', label: 'Torr → Pa' }, { value: 'p2t', label: 'Pa → Torr' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'p2t') return { result: x / 133.322, unit: 'Torr' }; return { result: x * 133.322, unit: 'Pa' }; },
+  },
+  {
+    id: 'nudo-ms',
+    name: 'kn ↔ m/s',
+    category: 'Conversiones',
+    formula: '1 kn = 0.514444 m/s',
+    description: 'Nudos y metros por segundo.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'k2m', options: [{ value: 'k2m', label: 'kn → m/s' }, { value: 'm2k', label: 'm/s → kn' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'm2k') return { result: x / 0.514444, unit: 'kn' }; return { result: x * 0.514444, unit: 'm/s' }; },
+  },
+  {
+    id: 'mph-kmh',
+    name: 'mph ↔ km/h',
+    category: 'Conversiones',
+    formula: '1 mph ≈ 1.60934 km/h',
+    description: 'Millas por hora y kilómetros por hora.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'm2k', options: [{ value: 'm2k', label: 'mph → km/h' }, { value: 'k2m', label: 'km/h → mph' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'k2m') return { result: x / 1.60934, unit: 'mph' }; return { result: x * 1.60934, unit: 'km/h' }; },
+  },
+  {
+    id: 'ha-m2',
+    name: 'ha ↔ m²',
+    category: 'Conversiones',
+    formula: '1 ha = 10 000 m²',
+    description: 'Hectáreas y metros cuadrados.',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'h2m', options: [{ value: 'h2m', label: 'ha → m²' }, { value: 'm2h', label: 'm² → ha' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'm2h') return { result: x / 10000, unit: 'ha' }; return { result: x * 10000, unit: 'm²' }; },
+  },
+  {
+    id: 'bytes',
+    name: 'B ↔ KiB ↔ MiB',
+    category: 'Conversiones',
+    formula: '1 KiB = 1024 B',
+    description: 'Bytes binarios (1024).',
+    fields: [
+      { key: 'dir', label: 'Dir', type: 'select', defaultValue: 'b2k', options: [{ value: 'b2k', label: 'B → KiB' }, { value: 'k2b', label: 'KiB → B' }, { value: 'b2m', label: 'B → MiB' }, { value: 'm2b', label: 'MiB → B' }] },
+      { key: 'x', label: 'Valor' }
+    ],
+    compute: (v) => { const x = num(v.x, 'x'); if (v.dir === 'k2b') return { result: x * 1024, unit: 'B' }; if (v.dir === 'b2m') return { result: x / (1024 * 1024), unit: 'MiB' }; if (v.dir === 'm2b') return { result: x * 1024 * 1024, unit: 'B' }; return { result: x / 1024, unit: 'KiB' }; },
   }
 ];
 
-const FN_OPENERS = ['sin(', 'cos(', 'tan(', 'ln(', 'log(', 'abs(', '√(', '∛(', '∜(', 'fact(', 'exp(', 'asin(', 'acos(', 'atan('];
+const FN_OPENERS = ['sin(', 'cos(', 'tan(', 'ln(', 'log(', 'abs(', 'fact(', 'exp(', 'asin(', 'acos(', 'atan(', 'sinh(', 'cosh(', 'tanh('];
+const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+function toSup(n: number): string {
+  return String(Math.max(2, Math.floor(n))).replace(/\d/g, (d) => SUP[Number(d)]);
+}
+function fromSup(s: string): string {
+  return s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (c) => String(SUP.indexOf(c)));
+}
+function explainPad(expr: string, result: string, angle: 'DEG' | 'RAD'): { explanation: string; steps: string[] } {
+  const steps = [
+    `1. Se tomó la expresión escrita: ${expr}.`,
+    `2. Modo angular: ${angle}. sin, cos y tan leen el ángulo en ${angle === 'DEG' ? 'grados' : 'radianes'}.`,
+    '3. Un número junto a un paréntesis, una llave, un corchete o una función se multiplica. Ejemplo: 5(2) = 10.',
+    '4. Primero se resuelven agrupaciones () {} [], luego potencias y raíces, después × ÷, y al final + −.',
+  ];
+  if (/[√∛∜]|[⁰¹²³⁴⁵⁶⁷⁸⁹]√/.test(expr)) steps.push('5. Cada raíz usa el índice escrito antes del símbolo √. Sin índice, √ es índice 2.');
+  if (/\^/.test(expr)) steps.push('Las potencias se calculan de derecha a izquierda: 2^3^2 = 2^(3^2).');
+  if (/sin|cos|tan|asin|acos|atan/i.test(expr)) steps.push(`Las razones trigonométricas se evaluaron en ${angle}.`);
+  steps.push(`Resultado: ${result}.`);
+  return {
+    explanation: `Se evaluó «${expr}» en modo ${angle}. El motor respetó el orden de las operaciones, cerró las agrupaciones y aplicó multiplicación implícita. Resultado: ${result}.`,
+    steps,
+  };
+}
 
 export default function Calcular() {
   const navigate = useNavigate();
@@ -1483,10 +2368,40 @@ export default function Calcular() {
 
   const [expression, setExpression] = useState('');
   const [resultDisplay, setResultDisplay] = useState('0');
-  const [guide, setGuide] = useState('Edita con el cursor · √ⁿ para raíces · Science Mode para fórmulas.');
+  const [guide, setGuide] = useState('Edita con el cursor · Science Mode para fórmulas.');
   const [shake, setShake] = useState(false);
   const [scienceOpen, setScienceOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
+  const [floating, setFloating] = useState(false);
+  const floatOutside = async () => {
+    const desktop = (window as unknown as { rbcDesktop?: { openFloat?: () => Promise<unknown> } }).rbcDesktop;
+    if (desktop?.openFloat) {
+      await desktop.openFloat();
+      setGuide('Ventana flotante abierta fuera del navegador.');
+      return;
+    }
+    const pip = (window as unknown as { documentPictureInPicture?: { requestWindow: (o: { width: number; height: number }) => Promise<Window> } }).documentPictureInPicture;
+    if (pip) {
+      const win = await pip.requestWindow({ width: 460, height: 760 });
+      win.document.body.style.margin = '0';
+      win.document.body.style.background = '#07070c';
+      const frame = win.document.createElement('iframe');
+      frame.src = `${location.origin}/calcular?float=1`;
+      frame.style.cssText = 'border:0;width:100%;height:100vh';
+      win.document.body.appendChild(frame);
+      setGuide('Calculadora flotando encima de otras ventanas.');
+      return;
+    }
+    const popup = window.open(`${location.origin}/calcular?float=1`, 'rbc-float', 'popup=yes,width=460,height=760');
+    if (popup) {
+      setGuide('Ventana flotante abierta.');
+      return;
+    }
+    setFloating(true);
+    setGuide('Flotando dentro de la página. En Chrome o Edge puede salir fuera.');
+  };
+  const [floatPos, setFloatPos] = useState({ x: 24, y: 24 });
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
   const [rootOpen, setRootOpen] = useState(false);
   const [rootIndex, setRootIndex] = useState('2');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -1499,6 +2414,7 @@ export default function Calcular() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [angleMode, setAngleMode] = useState<'DEG' | 'RAD'>('DEG');
   const [expandedHist, setExpandedHist] = useState<string | null>(null);
+  const [memory, setMemory] = useState(0);
 
   useEffect(() => {
     try {
@@ -1528,10 +2444,10 @@ export default function Calcular() {
     let insert = text;
     let cursorOffset = text.length;
     if (opts?.autoClose !== false) {
-      if (text.endsWith('(') || FN_OPENERS.includes(text)) {
-        const base = text.endsWith('(') ? text : text + '(';
-        insert = base + ')';
-        cursorOffset = base.length;
+      if (text.endsWith('(') || text.endsWith('{') || text.endsWith('[')) {
+        const close = text.endsWith('{') ? '}' : text.endsWith('[') ? ']' : ')';
+        insert = text + close;
+        cursorOffset = text.length;
       }
     }
     const next = expression.slice(0, start) + insert + expression.slice(end);
@@ -1572,11 +2488,8 @@ export default function Calcular() {
       const value = safeEval(expr, angleMode);
       const formatted = formatDisplay(value);
       setResultDisplay(formatted);
-      addHistory(expression, formatted, {
-        explanation: `Evaluación de «${expr}» en modo ${angleMode}.`,
-        steps: [`Expresión: ${expr}`, `Modo angular: ${angleMode}`, `Resultado: ${formatted}`],
-        source: 'pad',
-      });
+      const lesson = explainPad(expr, formatted, angleMode);
+      addHistory(expression, formatted, { ...lesson, source: 'pad' });
       setGuide(`${expr}  →  ${formatted}`);
     } catch (e) {
       triggerShake();
@@ -1611,13 +2524,15 @@ export default function Calcular() {
         .map((f) => `${f.label}${f.unit ? ' (' + f.unit + ')' : ''} = ${formValues[f.key] ?? '—'}`)
         .join('; ');
       const steps = out.steps ?? [
-        `Operación: ${activeOp.name}`,
-        `Fórmula: ${activeOp.formula}`,
-        `Datos: ${inputSummary}`,
-        `Resultado: ${withUnit}`,
+        `1. Operación elegida: ${activeOp.name} (${activeOp.category}).`,
+        `2. Fórmula: ${activeOp.formula}.`,
+        `3. Qué significa: ${activeOp.description}`,
+        `4. Datos introducidos: ${inputSummary}.`,
+        `5. Se sustituyeron los datos en la fórmula y se operó en ese orden.`,
+        `6. Resultado: ${withUnit}.`,
       ];
       addHistory(`${activeOp.name}: ${activeOp.formula}`, withUnit, {
-        explanation: `Science Mode — ${activeOp.name}. Fórmula: ${activeOp.formula}. ${activeOp.description} Entradas: ${inputSummary}. Resultado: ${withUnit}.`,
+        explanation: `Science Mode — ${activeOp.name}. Se usó ${activeOp.formula}. ${activeOp.description} Con los datos ${inputSummary} se obtuvo ${withUnit}.`,
         steps, source: 'science', opName: activeOp.name,
       });
       setGuide(`${activeOp.name} → ${withUnit}`);
@@ -1678,43 +2593,51 @@ export default function Calcular() {
 
   type PadBtn = { label: ReactNode; action: () => void; className?: string; span?: number; title?: string };
 
-  const sciRow: PadBtn[] = [
+  const sciFns: PadBtn[] = [
     { label: 'sin', action: () => insertFn('sin('), className: 'btn-fn', title: 'Seno' },
     { label: 'cos', action: () => insertFn('cos('), className: 'btn-fn', title: 'Coseno' },
     { label: 'tan', action: () => insertFn('tan('), className: 'btn-fn', title: 'Tangente' },
+    { label: 'asin', action: () => insertFn('asin('), className: 'btn-fn', title: 'Arcoseno' },
+    { label: 'acos', action: () => insertFn('acos('), className: 'btn-fn', title: 'Arcocoseno' },
+    { label: 'atan', action: () => insertFn('atan('), className: 'btn-fn', title: 'Arcotangente' },
+    { label: 'sinh', action: () => insertFn('sinh('), className: 'btn-fn', title: 'Seno hiperbólico' },
+    { label: 'cosh', action: () => insertFn('cosh('), className: 'btn-fn', title: 'Coseno hiperbólico' },
+    { label: 'tanh', action: () => insertFn('tanh('), className: 'btn-fn', title: 'Tangente hiperbólica' },
     { label: 'ln', action: () => insertFn('ln('), className: 'btn-fn', title: 'Log natural' },
     { label: 'log', action: () => insertFn('log('), className: 'btn-fn', title: 'Log₁₀' },
-  ];
-  const sciRow2: PadBtn[] = [
-    { label: 'π', action: () => insertAtCursor('π'), className: 'btn-fn' },
-    { label: 'e', action: () => insertAtCursor('e'), className: 'btn-fn' },
-    { label: '√ⁿ', action: () => setRootOpen(true), className: 'btn-fn', title: 'Raíz con índice' },
-    { label: 'xʸ', action: () => insertAtCursor('^'), className: 'btn-fn' },
+    { label: '√ⁿ', action: () => setRootOpen(true), className: 'btn-fn', title: 'Raíz: elige el índice' },
+    { label: 'xʸ', action: () => insertAtCursor('^'), className: 'btn-fn', title: 'Exponente' },
+    { label: '{', action: () => insertAtCursor('{', { autoClose: true }), className: 'btn-fn', title: 'Llave' },
+    { label: '}', action: () => insertAtCursor('}'), className: 'btn-fn', title: 'Cerrar llave' },
+    { label: '[', action: () => insertAtCursor('[', { autoClose: true }), className: 'btn-fn', title: 'Corchete' },
+    { label: ']', action: () => insertAtCursor(']'), className: 'btn-fn', title: 'Cerrar corchete' },
     { label: '|x|', action: () => insertFn('abs('), className: 'btn-fn' },
     { label: 'n!', action: () => insertFn('fact('), className: 'btn-fn' },
+    { label: 'π', action: () => insertAtCursor('π'), className: 'btn-fn' },
+    { label: 'e', action: () => insertAtCursor('e'), className: 'btn-fn' },
+    { label: 'exp', action: () => insertFn('exp('), className: 'btn-fn' },
   ];
   const padButtons: PadBtn[] = [
     { label: 'C', action: clearAll, className: 'btn-danger' },
     { label: '⌫', action: backspace, className: 'btn-warn' },
     { label: '(', action: () => insertAtCursor('(', { autoClose: true }), className: 'btn-op' },
     { label: ')', action: () => insertAtCursor(')'), className: 'btn-op' },
-    { label: '÷', action: () => insertAtCursor('/'), className: 'btn-op' },
     { label: '7', action: () => insertAtCursor('7') },
     { label: '8', action: () => insertAtCursor('8') },
     { label: '9', action: () => insertAtCursor('9') },
-    { label: '×', action: () => insertAtCursor('*'), className: 'btn-op' },
-    { label: '%', action: () => insertAtCursor('%'), className: 'btn-op' },
+    { label: '÷', action: () => insertAtCursor('/'), className: 'btn-op' },
     { label: '4', action: () => insertAtCursor('4') },
     { label: '5', action: () => insertAtCursor('5') },
     { label: '6', action: () => insertAtCursor('6') },
-    { label: '−', action: () => insertAtCursor('-'), className: 'btn-op' },
-    { label: '+', action: () => insertAtCursor('+'), className: 'btn-op' },
+    { label: '×', action: () => insertAtCursor('*'), className: 'btn-op' },
     { label: '1', action: () => insertAtCursor('1') },
     { label: '2', action: () => insertAtCursor('2') },
     { label: '3', action: () => insertAtCursor('3') },
+    { label: '−', action: () => insertAtCursor('-'), className: 'btn-op' },
     { label: '0', action: () => insertAtCursor('0') },
     { label: '.', action: () => insertAtCursor('.') },
-    { label: '=', action: calculate, className: 'btn-eq', span: 5 },
+    { label: '%', action: () => insertAtCursor('%'), className: 'btn-op' },
+    { label: '+', action: () => insertAtCursor('+'), className: 'btn-op' },
   ];
 
   const formatTime = (ts: number) => {
@@ -1725,12 +2648,45 @@ export default function Calcular() {
   return (
     <>
       <style>{CSS}</style>
-      <div className="calc-page">
-        <header className="calc-header">
+      <div
+        className={`calc-page${floating ? ' is-float' : ''}`}
+        style={floating ? { left: floatPos.x, top: floatPos.y } : undefined}
+      >
+        <header
+          className="calc-header"
+          onPointerDown={(e) => {
+            if (!floating) return;
+            const t = e.target as HTMLElement;
+            if (t.closest('button')) return;
+            drag.current = { dx: e.clientX - floatPos.x, dy: e.clientY - floatPos.y };
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (!drag.current) return;
+            setFloatPos({ x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy });
+          }}
+          onPointerUp={() => { drag.current = null; }}
+        >
           <button type="button" className="icon-btn" onClick={() => navigate('/proyectos')} title="Volver">←</button>
           <h1 className="calc-title">Calculadora</h1>
           <div className="header-actions">
-            <button type="button" className="chip-modules" onClick={() => setModulesOpen(true)}>Módulos</button>
+            <div className="menu-wrap">
+              <button type="button" className="chip-modules" onClick={() => setModulesOpen((s) => !s)} aria-expanded={modulesOpen}>
+                Módulos ▾
+              </button>
+              {modulesOpen && (
+                <div className="drop-menu" role="menu">
+                  {MODULES.map((m) => (
+                    <button key={m.id} type="button" onClick={() => { setModulesOpen(false); navigate(m.path); }}>
+                      <strong>{m.icon} {m.name}</strong>
+                      <span>{m.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button type="button" className={`chip ${floating ? 'chip-on' : ''}`}
+              onClick={() => { void floatOutside(); }} title="Flotar fuera de la página">{floating ? 'Anclar' : 'Flotar'}</button>
             <button type="button" className={`chip ${angleMode === 'DEG' ? 'chip-on' : ''}`}
               onClick={() => setAngleMode((m) => (m === 'DEG' ? 'RAD' : 'DEG'))}>{angleMode}</button>
             <button type="button" className={`icon-btn ${historyOpen ? 'icon-active' : ''}`}
@@ -1759,17 +2715,27 @@ export default function Calcular() {
               <p className="display-guide">{guide}</p>
             </div>
 
-            <div className="fn-block">
-              <div className="fn-row">
-                {sciRow.map((b, i) => (
-                  <button key={i} type="button" className={`btn ${b.className ?? ''}`} onClick={b.action} title={b.title}>{b.label}</button>
-                ))}
-              </div>
-              <div className="fn-row">
-                {sciRow2.map((b, i) => (
-                  <button key={i} type="button" className={`btn ${b.className ?? ''}`} onClick={b.action} title={b.title}>{b.label}</button>
-                ))}
-              </div>
+            <div className="mem-row" aria-label="Memoria">
+              <button type="button" className="btn btn-mem" title="Borrar memoria" onClick={() => { setMemory(0); setGuide('Memoria borrada.'); }}>MC</button>
+              <button type="button" className="btn btn-mem" title="Recuperar memoria" onClick={() => { insertAtCursor(String(memory)); setGuide('Memoria recuperada.'); }}>MR</button>
+              <button type="button" className="btn btn-mem" title="Sumar resultado a la memoria" onClick={() => {
+                const n = parseFloat((stripFormatting(resultDisplay).match(/-?[\d.]+(?:e[+-]?\d+)?/i) || ['0'])[0]);
+                if (Number.isFinite(n)) { setMemory((m) => m + n); setGuide('M+  ' + formatDisplay(memory + n)); }
+              }}>M+</button>
+              <button type="button" className="btn btn-mem" title="Restar resultado de la memoria" onClick={() => {
+                const n = parseFloat((stripFormatting(resultDisplay).match(/-?[\d.]+(?:e[+-]?\d+)?/i) || ['0'])[0]);
+                if (Number.isFinite(n)) { setMemory((m) => m - n); setGuide('M−  ' + formatDisplay(memory - n)); }
+              }}>M−</button>
+              <button type="button" className="btn btn-mem" title="Insertar último resultado" onClick={() => {
+                const raw = history[0]?.result || resultDisplay;
+                const m = stripFormatting(raw).match(/-?[\d.]+(?:e[+-]?\d+)?/i);
+                insertAtCursor(m ? m[0] : '0');
+              }}>ANS</button>
+            </div>
+            <div className="fn-scroll" aria-label="Funciones">
+              {sciFns.map((b, i) => (
+                <button key={i} type="button" className={`btn ${b.className ?? ''}`} onClick={b.action} title={b.title}>{b.label}</button>
+              ))}
             </div>
 
             <div className="pad">
@@ -1780,8 +2746,8 @@ export default function Calcular() {
               ))}
             </div>
 
-            <div className="action-bar">
-              <button type="button" className="btn btn-accent action-primary" onClick={() => setScienceOpen(true)}>Science Mode</button>
+            <div className="dock">
+              <button type="button" className="btn btn-accent" onClick={() => setScienceOpen(true)}>Science</button>
               <button type="button" className="btn btn-ghost" onClick={async () => {
                 try { await navigator.clipboard.writeText(resultDisplay); setGuide('Copiado.'); }
                 catch { setGuide('No se pudo copiar.'); }
@@ -1791,6 +2757,7 @@ export default function Calcular() {
                 catch { setGuide('No se pudo pegar.'); }
               }}>Pegar</button>
               <button type="button" className="btn btn-ghost" onClick={() => { setHistory([]); setGuide('Historial borrado.'); }}>Reset</button>
+              <button type="button" className="btn btn-eq" onClick={calculate}>=</button>
             </div>
           </main>
 
@@ -1799,9 +2766,7 @@ export default function Calcular() {
               <h2>Historial</h2>
               <button type="button" className="icon-btn close-hist" onClick={() => setHistoryOpen(false)} aria-label="Cerrar">✕</button>
             </div>
-            <p className="hist-hint">
-              <strong>Expresión</strong> → editar · <strong>Resultado</strong> → usar valor
-            </p>
+            <p className="hist-hint">Toca la expresión para editarla. Toca el resultado para volver a usarlo. Abre el procedimiento para ver cómo se resolvió.</p>
             <div className="hist-scroll">
               {history.length === 0 && <p className="muted">Sin cálculos todavía.</p>}
               <ul className="hist-list">
@@ -1861,15 +2826,11 @@ export default function Calcular() {
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setRootOpen(false)}>Cancelar</button>
                 <button type="button" id="root-insert-btn" className="btn btn-accent" onClick={() => {
-                  const n = parseInt(rootIndex, 10) || 2;
+                  const n = Math.max(2, parseInt(rootIndex, 10) || 2);
                   setRootOpen(false);
-                  if (n === 2) insertFn('√(');
-                  else if (n === 3) insertFn('∛(');
-                  else if (n === 4) insertFn('∜(');
-                  else {
-                    insertAtCursor('root(', { autoClose: true });
-                    setGuide(`Completa: root(valor, ${n})`);
-                  }
+                  const token = n === 2 ? '√(' : n === 3 ? '∛(' : n === 4 ? '∜(' : `${toSup(n)}√(`;
+                  insertFn(token);
+                  setGuide(`Raíz de índice ${n}. Escribe el radicando dentro del símbolo.`);
                 }}>Insertar</button>
               </div>
             </div>
@@ -1884,7 +2845,8 @@ export default function Calcular() {
                 <button type="button" className="icon-btn" onClick={() => setScienceOpen(false)}>✕</button>
               </div>
               <div className="search-wrap">
-                <input className="search-input" placeholder="Buscar fórmula…" value={search}
+                <span className="search-icon" aria-hidden>⌕</span>
+                <input className="search-input" placeholder="Buscar fórmula, magnitud o categoría…" value={search}
                   onChange={(e) => setSearch(e.target.value)} autoFocus />
               </div>
               <div className="cat-chips">
@@ -1901,6 +2863,7 @@ export default function Calcular() {
                     <span className="op-cat">{op.category}</span>
                     <span className="op-name">{op.name}</span>
                     <span className="op-formula">{op.formula}</span>
+                    <span className="op-desc">{op.description}</span>
                   </button>
                 ))}
               </div>
@@ -1955,28 +2918,6 @@ export default function Calcular() {
           </div>
         )}
 
-        {modulesOpen && (
-          <div className="modal-overlay" onClick={() => setModulesOpen(false)} role="presentation">
-            <div className="modal modules-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-              <div className="modal-head">
-                <h2>Módulos</h2>
-                <button type="button" className="icon-btn" onClick={() => setModulesOpen(false)}>✕</button>
-              </div>
-              <p className="modules-intro">Herramientas especializadas (próximamente en TSX).</p>
-              <div className="modules-grid">
-                {MODULES.map((m) => (
-                  <button key={m.id} type="button" className="module-card"
-                    onClick={() => { setModulesOpen(false); navigate(m.path); }}>
-                    <span className="module-icon">{m.icon}</span>
-                    <span className="module-name">{m.name}</span>
-                    <span className="module-desc">{m.desc}</span>
-                    <span className="module-path">{m.path}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );
@@ -1988,209 +2929,198 @@ const CSS = `
 *, *::before, *::after { box-sizing: border-box; }
 .calc-page {
   height: 100vh; height: 100dvh; max-height: 100dvh;
-  background-color: var(--bg-primary, #0c0c0c);
-  background-image: url('/images/backgrounds/FNP.png');
-  background-size: cover; background-position: center; background-blend-mode: overlay;
-  color: #fff; font-family: var(--font-main, system-ui, sans-serif);
+  background: #07070c url('/images/backgrounds/sTP.png') center/cover no-repeat;
+  color: #f6f6f8;
+  font-family: var(--font-main, system-ui, sans-serif);
   display: flex; flex-direction: column; overflow: hidden; position: relative;
 }
 .calc-page::before {
-  content: ''; position: absolute; inset: 0;
-  background: color-mix(in srgb, var(--bg-primary, #0c0c0c) 55%, transparent);
-  pointer-events: none; z-index: 0;
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.62), rgba(0,0,0,.42) 38%, rgba(0,0,0,.66));
 }
 .calc-page > * { position: relative; z-index: 1; }
 .calc-header {
-  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
-  border-bottom: 1px solid rgba(255,26,26,0.12);
-  background: rgba(0,0,0,0.15) !important;
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  z-index: 20; flex-shrink: 0;
+  height: 56px; flex: 0 0 56px; display: flex; align-items: center; gap: 8px;
+  padding: 0 10px; z-index: 20;
+  background: rgba(8,8,10,.38); backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255,255,255,.08);
 }
 .calc-title {
-  flex: 1; margin: 0; font-size: 1rem; font-weight: 700; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--accent, #ff1a1a);
-  text-shadow: 0 0 12px rgba(255,26,26,0.4);
+  flex: 1; margin: 0; font-size: .92rem; font-weight: 700; letter-spacing: .16em;
+  text-transform: uppercase; color: #ff2a2a; white-space: nowrap;
 }
-.header-actions { display: flex; gap: 6px; align-items: center; }
-.icon-btn {
-  width: 36px; height: 36px; border-radius: 9999px;
-  border: 1px solid rgba(255,26,26,0.25); background: rgba(255,255,255,0.06);
-  color: #fff; font-size: 1rem; cursor: pointer; transition: all 0.15s;
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.menu-wrap { position: relative; }
+.icon-btn, .chip, .chip-modules {
+  appearance: none; border: 1px solid rgba(255,255,255,.16);
+  background: rgba(18,18,22,.82); color: #f4f4f5; border-radius: 999px;
+  min-height: 36px; padding: 0 12px; font-size: .78rem; font-weight: 650; cursor: pointer;
 }
-.icon-btn:hover { background: rgba(255,26,26,0.2); border-color: var(--accent, #ff1a1a); }
-.icon-btn:active { transform: scale(0.94); }
-.icon-btn.icon-active { background: rgba(255,26,26,0.25); border-color: var(--accent, #ff1a1a); }
-.chip {
-  padding: 5px 10px; border-radius: 9999px; border: 1px solid rgba(255,26,26,0.25);
-  background: rgba(255,255,255,0.05); color: #c8c8c8; font-size: 0.75rem; font-weight: 600;
-  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+.icon-btn { width: 36px; padding: 0; }
+.chip-on, .icon-btn.icon-active {
+  background: linear-gradient(180deg, #ff3b3b, #9f1230); border-color: transparent; color: #fff;
 }
-.chip:hover { border-color: var(--accent, #ff1a1a); color: #fff; }
-.chip-on { background: rgba(255,26,26,0.28); border-color: var(--accent, #ff1a1a); color: #fff; }
-.chip-modules {
-  padding: 4px 10px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600;
-  cursor: pointer; color: #c8c8c8; background: rgba(26,35,126,0.35);
-  border: 1px solid rgba(57,73,171,0.35); transition: all 0.15s;
+.drop-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; width: min(280px, 78vw);
+  padding: 8px; border-radius: 16px; background: rgba(12,12,14,.94);
+  border: 1px solid rgba(255,255,255,.12); box-shadow: 0 18px 40px rgba(0,0,0,.45);
+  display: flex; flex-direction: column; gap: 4px; z-index: 40;
 }
-.chip-modules:hover { color: #fff; background: rgba(40,53,147,0.5); }
-.calc-body { flex: 1 1 auto; min-height: 0; max-height: 100%; display: flex; position: relative; overflow: hidden; }
+.drop-menu button {
+  text-align: left; border: 0; border-radius: 12px; padding: 10px 12px;
+  background: rgba(255,255,255,.04); color: inherit; cursor: pointer;
+}
+.drop-menu strong { display: block; font-size: .92rem; }
+.drop-menu span { display: block; color: #b7b7c2; font-size: .75rem; margin-top: 2px; }
+.drop-menu button:hover { outline: 1px solid rgba(225,29,46,.7); }
+.calc-body { flex: 1; min-height: 0; display: flex; position: relative; overflow: hidden; justify-content: center; }
 .calc-main {
-  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
-  padding: 12px 14px 16px; gap: 9px; overflow-y: auto; max-width: 520px; margin: 0 auto; width: 100%;
+  flex: 0 1 480px; width: min(480px, 100%); min-height: 0; margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto 48px 58px minmax(0, 1fr) 52px;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
 }
 .display-card {
-  background: rgba(8,8,8,0.55); border: 1px solid rgba(255,26,26,0.22);
-  border-radius: 16px; padding: 14px 16px 10px; box-shadow: 0 0 20px rgba(255,26,26,0.15);
-  backdrop-filter: blur(12px);
+  background: rgba(8,8,10,.78); border: 1px solid rgba(255,255,255,.14);
+  border-radius: 22px; padding: 12px 14px 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
 }
-.display-card.shake { animation: shake 0.38s ease; }
+.display-card.shake { animation: shake .35s ease; }
 @keyframes shake {
-  0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)}
-  60%{transform:translateX(-4px)} 80%{transform:translateX(4px)}
+  0%{transform:translateX(0)} 25%{transform:translateX(-5px)} 50%{transform:translateX(5px)}
+  75%{transform:translateX(-5px)} 100%{transform:translateX(0)}
 }
 .display-expr-input {
-  width: 100%; border: none; background: transparent;
-  color: #f0f0f0 !important;
-  font-size: clamp(1.05rem, 3.2vw, 1.35rem) !important;
-  font-family: var(--font-mono, ui-monospace, monospace); font-weight: 500;
-  text-align: right; outline: none; padding: 4px 0 8px;
-  caret-color: var(--accent, #ff1a1a); letter-spacing: 0.02em; min-height: 1.6em;
+  width: 100%; border: 0; background: transparent; color: #fff;
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.2rem;
+  text-align: right; outline: none; caret-color: #ff3b3b; padding: 0;
 }
-.display-expr-input::placeholder { color: rgba(255,255,255,0.35); }
-.display-expr-input:focus { color: #fff !important; }
 .display-result {
-  width: 100%; text-align: right; font-size: clamp(1.6rem, 5.5vw, 2.4rem);
-  font-family: var(--font-mono, ui-monospace, monospace); font-weight: 650;
-  color: #fff; word-break: break-all; line-height: 1.25; min-height: 1.3em;
+  margin-top: 4px; text-align: right; font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 600; font-size: clamp(1.7rem, 5vw, 2.45rem); letter-spacing: -.03em;
+  line-height: 1.15; word-break: break-all; color: #fff;
 }
-.display-guide { margin: 6px 0 0; font-size: 0.72rem; color: #b0b0b0; text-align: right; line-height: 1.35; min-height: 2em; }
-.fn-block { display: flex; flex-direction: column; gap: 5px; }
-.fn-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); gap: 5px; }
-.pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.display-guide {
+  margin: 6px 0 0; text-align: right; color: #d0d0d8; font-size: .75rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fn-scroll {
+  display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: none; min-height: 48px; align-items: center;
+  margin-bottom: 14px;
+}
+.calc-page.is-float {
+  position: fixed; z-index: 80; width: min(460px, calc(100vw - 16px));
+  height: min(760px, calc(100dvh - 16px)); border-radius: 22px; overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0,0,0,.55); border: 1px solid rgba(255,42,42,.4);
+}
+.calc-page.is-float .calc-header { cursor: grab; }
+.fn-scroll::-webkit-scrollbar { display: none; }
+.mem-row, .dock, .pad { display: grid; gap: 6px; min-height: 0; }
+.mem-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mem-row .btn { height: 36px; min-height: 36px; max-height: 36px; font-size: .78rem; }
+.dock {
+  grid-template-columns: 1.3fr repeat(3, minmax(0, .8fr)) 1.1fr;
+  align-items: stretch;
+}
+.dock .btn { height: 100%; min-height: 0; max-height: none; font-size: .82rem; border-radius: 14px; }
+.pad {
+  min-height: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+}
 .btn {
-  appearance: none; border: none; border-radius: 11px; padding: 12px 5px;
-  font-size: 1rem; font-weight: 650; cursor: pointer;
-  background: color-mix(in srgb, var(--accent, #ff1a1a) 40%, #1a1a1a); color: #fff;
-  box-shadow: 0 2px 6px rgba(255,26,26,0.2); transition: all 0.15s;
-  user-select: none; -webkit-tap-highlight-color: transparent;
+  appearance: none; border: 1px solid rgba(255,255,255,.1); border-radius: 16px;
+  color: #f7f7f8; font: inherit; font-weight: 650; font-size: 1.05rem;
+  min-height: 0; height: 100%; padding: 0 6px; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 8px 14px rgba(0,0,0,.28);
+  transition: transform .12s ease; user-select: none; touch-action: manipulation;
 }
-.btn:hover { background: color-mix(in srgb, var(--accent-hover, #ff4444) 50%, #222); }
-.btn:active { transform: scale(0.96); }
-.btn-op { background: linear-gradient(160deg, #ff9800, #e65100); }
-.btn-warn { background: linear-gradient(160deg, #ff6d00, #bf360c); }
-.btn-danger { background: linear-gradient(160deg, #e53935, #8e0000); }
-.btn-eq { background: linear-gradient(160deg, var(--accent, #ff1a1a), #800); font-size: 1.25rem; }
-.btn-fn { background: rgba(13,33,55,0.75); border: 1px solid rgba(26,74,110,0.45); font-size: 0.78rem; padding: 8px 3px; }
-.btn-fn:hover { background: rgba(21,101,192,0.4); }
-.btn-accent { background: linear-gradient(160deg, var(--accent, #ff1a1a), #800); padding: 10px 14px; font-size: 0.88rem; }
-.btn-ghost { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,26,26,0.22); box-shadow: none; color: #c8c8c8; padding: 10px 11px; font-size: 0.82rem; }
-.btn-ghost:hover { border-color: var(--accent, #ff1a1a); color: #fff; background: rgba(255,26,26,0.12); }
-.action-bar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding-top: 2px; }
-.action-primary { flex: 1 1 auto; min-width: 110px; }
+.btn:active { transform: scale(.97); }
+.btn:focus-visible { outline: 2px solid #ff5a5a; outline-offset: 2px; }
+.pad .btn:not(.btn-op):not(.btn-danger):not(.btn-warn):not(.btn-eq):not(.btn-fn):not(.btn-mem) {
+  background: linear-gradient(180deg, #32323a, #17171b);
+}
+.btn-op { background: linear-gradient(180deg, #f6b24a, #c2410c); color: #1a0c04; }
+.btn-fn {
+  background: linear-gradient(180deg, #24507f, #102743); color: #e7f1ff;
+  font-size: .95rem; flex: 0 0 auto; min-width: 64px; height: 44px; min-height: 44px;
+}
+.btn-mem { background: linear-gradient(180deg, #3c3c46, #222228); font-size: .92rem; }
+.btn-danger { background: linear-gradient(180deg, #b42323, #6f1218); }
+.btn-warn { background: linear-gradient(180deg, #9a3412, #7c2d12); }
+.btn-eq { background: linear-gradient(180deg, #ff3b3b, #9f1230); font-size: 1.35rem; }
+.btn-ghost {
+  background: rgba(20,20,24,.88); box-shadow: none; font-size: .78rem; font-weight: 650;
+}
+.btn-accent {
+  background: linear-gradient(180deg, #ff3b3b, #9f1230); font-size: .82rem;
+}
 .calc-history {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(310px, 88vw);
-  height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 60;
-  display: flex; flex-direction: column;
-  background: rgba(0,0,0,0.25) !important;
-  border-left: 1px solid rgba(255,26,26,0.12);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  box-shadow: -8px 0 28px rgba(0,0,0,0.35);
-  transform: translateX(105%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
-  overflow: hidden;
+  position: fixed; top: 56px; right: 0; bottom: 0; width: min(380px, 100%);
+  z-index: 7; display: flex; flex-direction: column;
+  background: rgba(10,10,12,.72); backdrop-filter: blur(22px);
+  border-left: 1px solid rgba(255,255,255,.1);
+  transform: translateX(105%); transition: transform .28s ease;
 }
 .calc-history.open { transform: translateX(0); }
-.hist-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 55; animation: fadeIn 0.2s ease; }
-.hist-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 4px; flex-shrink: 0; background: transparent !important; }
-.hist-head h2 { margin: 0; font-size: 0.88rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent, #ff1a1a); }
-.hist-hint { margin: 0 12px 8px; font-size: 0.68rem; color: #9ca3af; line-height: 1.4; flex-shrink: 0; }
-.hist-scroll {
-  flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden;
-  padding: 0 8px 24px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  scrollbar-width: thin; scrollbar-color: rgba(255,26,26,0.45) transparent;
-}
-.hist-scroll::-webkit-scrollbar { width: 5px; }
-.hist-scroll::-webkit-scrollbar-thumb { background: rgba(255,26,26,0.4); border-radius: 6px; }
+.hist-backdrop { position: fixed; inset: 56px 0 0 0; background: rgba(0,0,0,.28); z-index: 6; border: 0; }
+.hist-head { display: flex; align-items: center; justify-content: space-between; padding: 12px; }
+.hist-head h2 { margin: 0; color: #ff2a2a; letter-spacing: .12em; text-transform: uppercase; font-size: .84rem; }
+.hist-hint, .muted { color: #b7b7c2; font-size: .78rem; padding: 0 12px; }
+.hist-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 16px; }
 .hist-list { list-style: none; margin: 0; padding: 0; }
-.hist-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,26,26,0.1); border-radius: 11px; padding: 9px; margin-bottom: 8px; }
-.hist-meta { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
-.hist-source { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent, #ff1a1a); }
-.hist-time { font-size: 0.62rem; color: #9ca3af; }
-.hist-expr-btn, .hist-res-btn { display: block; width: 100%; text-align: left; background: transparent; border: none; cursor: pointer; padding: 3px 2px; border-radius: 5px; }
-.hist-expr-btn { font-size: 0.78rem; color: #d0d0d0; font-family: var(--font-mono, monospace); word-break: break-all; font-weight: 500; }
-.hist-expr-btn:hover { background: rgba(255,26,26,0.1); color: #fff; }
-.hist-res-btn { font-size: 0.92rem; font-family: var(--font-mono, monospace); font-weight: 700; color: var(--accent, #ff1a1a); margin-top: 1px; }
-.hist-res-btn:hover { background: rgba(255,26,26,0.12); }
-.hist-toggle { margin-top: 5px; background: none; border: none; color: #9ca3af; font-size: 0.68rem; cursor: pointer; padding: 2px 0; }
-.hist-toggle:hover { color: var(--accent, #ff1a1a); }
-.hist-detail { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,26,26,0.1); animation: fadeIn 0.2s ease; }
-.hist-explanation { margin: 0 0 6px; font-size: 0.72rem; color: #c8c8c8; line-height: 1.45; }
-.hist-steps { margin: 0; padding-left: 16px; font-size: 0.7rem; color: #9ca3af; line-height: 1.5; }
-.muted { color: #9ca3af; font-size: 0.82rem; padding: 4px 6px; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 14px; animation: fadeIn 0.2s ease; }
-@keyframes fadeIn { from{opacity:0} to{opacity:1} }
-.modal {
-  background: rgba(12,12,12,0.92); border: 1px solid rgba(255,26,26,0.22); border-radius: 18px;
-  box-shadow: 0 0 36px rgba(255,26,26,0.22), 0 20px 40px rgba(0,0,0,0.5);
-  width: 100%; max-height: min(90vh, 720px); display: flex; flex-direction: column;
-  animation: popIn 0.26s cubic-bezier(0.16,1,0.3,1); overflow: hidden; backdrop-filter: blur(18px);
+.hist-card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 10px; margin-bottom: 8px; }
+.hist-expr-btn, .hist-res-btn, .hist-toggle { display: block; width: 100%; text-align: left; background: transparent; border: 0; color: inherit; padding: 3px 0; font: inherit; cursor: pointer; }
+.hist-expr-btn { font-family: var(--font-mono, ui-monospace, monospace); font-size: .86rem; color: #fff; }
+.hist-res-btn { font-family: var(--font-mono, ui-monospace, monospace); color: #ffb4b4; font-size: .95rem; }
+.hist-meta { color: #b7b7c2; font-size: .72rem; display: flex; justify-content: space-between; }
+.hist-source { color: #ff4d4d; }
+.hist-detail, .hist-steps { color: #ddd; font-size: .75rem; }
+.modal-overlay { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.62); display: grid; place-items: center; padding: 16px; }
+.modal { width: min(920px, 100%); height: min(820px, calc(100dvh - 24px)); display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(18,18,22,.97), rgba(10,10,12,.96)); border: 1px solid rgba(255,42,42,.35); border-radius: 24px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+.root-modal { height: auto; max-height: calc(100dvh - 32px); width: min(440px, 100%); }
+.modal-head { display: flex; align-items: center; gap: 8px; padding: 16px 18px; border-bottom: 1px solid rgba(255,42,42,.22); background: rgba(255,42,42,.06); }
+.modal-head h2, .modal h2 { margin: 0; flex: 1; color: #ff2a2a; letter-spacing: .08em; text-transform: uppercase; font-size: 1.02rem; }
+.search-wrap { position: relative; padding: 14px 18px 6px; }
+.search-icon { position: absolute; left: 32px; top: 27px; color: #ff4d4d; font-size: 1.1rem; }
+.search-input, .field input, .field select {
+  width: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,.16);
+  background: #111116; color: #fff; font: inherit; padding: 12px 14px 12px 38px; outline: none;
 }
-@keyframes popIn { from{opacity:0;transform:scale(0.95) translateY(12px)} to{opacity:1;transform:scale(1) translateY(0)} }
-.science-modal { max-width: 640px; } .op-modal { max-width: 440px; } .modules-modal { max-width: 460px; } .root-modal { max-width: 360px; }
-.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px 16px 6px; flex-shrink: 0; }
-.modal-head h2 { margin: 4px 0 0; font-size: 1.1rem; color: #fff; }
-.search-wrap { padding: 0 16px 6px; flex-shrink: 0; }
-.search-input { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid rgba(255,26,26,0.22); background: rgba(22,22,22,0.7); color: #fff; font-size: 0.92rem; outline: none; }
-.search-input:focus { border-color: var(--accent, #ff1a1a); box-shadow: 0 0 0 3px rgba(255,26,26,0.25); }
-.cat-chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 16px 8px; flex-shrink: 0; }
-.op-grid { flex: 1; overflow-y: auto; padding: 4px 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; align-content: start; scrollbar-width: thin; }
-.op-card { text-align: left; padding: 11px; border-radius: 11px; border: 1px solid rgba(255,26,26,0.14); background: rgba(22,22,22,0.55); color: #fff; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; gap: 3px; }
-.op-card:hover { border-color: var(--accent, #ff1a1a); background: rgba(255,26,26,0.12); transform: translateY(-2px); }
-.op-cat { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent, #ff1a1a); }
-.op-name { font-size: 0.84rem; font-weight: 650; line-height: 1.25; }
-.op-formula { font-size: 0.7rem; font-family: var(--font-mono, monospace); color: #9ca3af; }
-.formula-box { margin: 0 16px; padding: 11px 12px; border-radius: 11px; background: rgba(255,26,26,0.1); border: 1px solid rgba(255,26,26,0.18); text-align: center; }
-.formula-box code { font-family: var(--font-mono, monospace); font-size: 1rem; color: var(--accent, #ff1a1a); }
-.op-desc { margin: 8px 16px; font-size: 0.84rem; color: #c8c8c8; line-height: 1.4; }
-.form-fields { padding: 0 16px; display: flex; flex-direction: column; gap: 9px; overflow-y: auto; max-height: 36vh; }
-.field { display: flex; flex-direction: column; gap: 3px; }
-.field-label { font-size: 0.78rem; color: #c8c8c8; }
-.unit { color: #9ca3af; font-size: 0.72rem; }
-.field input, .field select { padding: 9px 11px; border-radius: 9px; border: 1px solid rgba(255,26,26,0.2); background: rgba(22,22,22,0.7); color: #fff; font-size: 0.95rem; outline: none; }
-.field input:focus, .field select:focus { border-color: var(--accent, #ff1a1a); box-shadow: 0 0 0 3px rgba(255,26,26,0.25); }
-.form-error { margin: 8px 16px 0; padding: 7px 11px; border-radius: 9px; background: rgba(183,28,28,0.25); color: #ff8a80; font-size: 0.82rem; }
-.form-result { margin: 10px 16px 0; padding: 12px; border-radius: 11px; background: rgba(255,26,26,0.1); border: 1px solid rgba(255,26,26,0.2); display: flex; flex-direction: column; gap: 3px; animation: popIn 0.2s ease; }
-.res-val { font-size: 1.25rem; font-family: var(--font-mono, monospace); color: var(--accent, #ff1a1a); font-weight: 700; }
-.res-detail { font-size: 0.78rem; color: #c8c8c8; }
-.modal-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; padding: 12px 16px; flex-shrink: 0; border-top: 1px solid rgba(255,26,26,0.1); margin-top: 10px; }
-.root-presets { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px 0; }
-.modules-intro { margin: 0 16px 10px; font-size: 0.82rem; color: #c8c8c8; line-height: 1.4; }
-.modules-grid { padding: 0 12px 16px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-.module-card { text-align: left; padding: 12px 14px; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255,26,26,0.14); background: rgba(22,22,22,0.5); color: #fff; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; transition: all 0.15s; }
-.module-card:hover { border-color: var(--accent, #ff1a1a); background: rgba(255,26,26,0.1); transform: translateY(-1px); }
-.module-icon { grid-row: 1 / 4; font-size: 1.5rem; align-self: center; }
-.module-name { font-weight: 700; font-size: 0.95rem; }
-.module-desc { font-size: 0.75rem; color: #c8c8c8; line-height: 1.3; }
-.module-path { font-size: 0.68rem; font-family: var(--font-mono, monospace); color: var(--accent, #ff1a1a); opacity: 0.85; }
-@media (max-width: 768px) {
-  .calc-main { max-width: 100%; padding: 10px; }
-  .pad { gap: 5px; } .btn { padding: 11px 3px; font-size: 0.92rem; }
-  .btn-fn { font-size: 0.72rem; padding: 7px 2px; }
-  .op-grid { grid-template-columns: 1fr 1fr; }
-}
-@media (max-width: 400px) { .op-grid { grid-template-columns: 1fr; } .fn-row { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 900px) {
-  .calc-history {
-    position: relative; transform: none; width: 290px; flex-shrink: 0; box-shadow: none;
-    height: 100%; max-height: 100%;
-    border-left: 1px solid rgba(255,26,26,0.12);
-    background: rgba(0,0,0,0.18) !important;
-  }
+.field input, .field select { padding-left: 14px; }
+.search-input:focus, .field input:focus, .field select:focus { border-color: #ff2a2a; box-shadow: 0 0 0 3px rgba(255,42,42,.18); }
+.cat-chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 18px; scrollbar-width: none; }
+.op-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 6px 18px 18px; overflow: auto; min-height: 0; flex: 1; }
+.op-card { text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 16px; border: 1px solid rgba(255,255,255,.1); background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); color: #fff; cursor: pointer; }
+.op-card:hover { border-color: #ff2a2a; transform: translateY(-1px); }
+.op-cat { align-self: flex-start; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: #ffb4b4; border: 1px solid rgba(255,42,42,.4); border-radius: 999px; padding: 3px 8px; }
+.op-name { font-weight: 720; font-size: .98rem; }
+.op-formula { color: #fff; font-family: var(--font-mono, ui-monospace, monospace); font-size: .84rem; background: rgba(255,42,42,.1); border-radius: 10px; padding: 6px 8px; }
+.op-desc, .form-error, .res-detail { color: #d0d0d8; font-size: .8rem; }
+.formula-box { margin: 14px 18px 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,42,42,.08); border: 1px solid rgba(255,42,42,.28); }
+.formula-box code { font-size: 1.05rem; color: #fff; }
+.form-fields { display: flex; flex-direction: column; gap: 10px; padding: 12px 18px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field-label { font-size: .78rem; color: #d0d0d8; }
+.form-error { margin: 0 18px; padding: 8px 12px; border-radius: 12px; background: rgba(183,28,28,.28); color: #ffb4ab; }
+.form-result { margin: 12px 18px 0; padding: 16px; border-radius: 16px; background: rgba(225,29,46,.12); border: 1px solid rgba(225,29,46,.28); }
+.res-val { font-size: 1.5rem; color: #ff4d4d; font-weight: 740; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.08); }
+.hist-card { background: rgba(12,12,14,.72); border: 1px solid rgba(255,255,255,.1); border-radius: 16px; padding: 12px; margin-bottom: 10px; }
+.hist-explanation { margin: 8px 0 0; color: #ececf2; font-size: .8rem; line-height: 1.45; }
+.hist-steps { margin: 8px 0 0; padding-left: 18px; color: #d7d7e0; font-size: .78rem; line-height: 1.4; }
+.hist-toggle { color: #ffb4b4; font-size: .75rem; }
+.root-presets { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 14px 0; }
+.science-modal { display: flex; flex-direction: column; }
+.close-hist { background: transparent; border: 0; color: #fff; cursor: pointer; font-size: 1.1rem; }
+@media (max-width: 720px) { .op-grid { grid-template-columns: 1fr; } .calc-title { font-size: .78rem; letter-spacing: .08em; } }
+@media (min-width: 980px) {
+  .calc-body:has(.calc-history.open) { justify-content: flex-start; }
+  .calc-history { position: relative; top: auto; right: auto; bottom: auto; transform: none; width: 340px; height: 100%; }
   .calc-history:not(.open) { display: none; }
-  .calc-history.open { display: flex; transform: none; }
-  .hist-backdrop { display: none; }
-  .close-hist { display: none; }
+  .calc-history.open { display: flex; }
+  .hist-backdrop, .close-hist { display: none; }
 }
 `;

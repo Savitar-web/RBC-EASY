@@ -1,15 +1,24 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.savitar.rbc',
+  appId: 'app.rbc.easy',
   appName: 'RBC EASY',
   webDir: 'dist',
-  server: {
-    androidScheme: 'https'
-  },
   android: {
-    allowMixedContent: true
-  }
+    path: 'android',
+    allowMixedContent: false,
+  },
+  server: {
+    androidScheme: 'https',
+    iosScheme: 'https',
+  },
+  plugins: {
+    SplashScreen: {
+      launchAutoHide: true,
+      backgroundColor: '#07070c',
+      showSpinner: false,
+    },
+  },
 };
 
 export default config;

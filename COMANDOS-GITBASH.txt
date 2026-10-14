@@ -1,0 +1,98 @@
+RBC EASY — comandos para Git Bash
+=================================
+
+Requisitos (una sola vez en la PC)
+----------------------------------
+1. Git para Windows: https://git-scm.com/download/win
+2. Node.js LTS:      https://nodejs.org
+   Cierra y vuelve a abrir Git Bash después de instalar Node.
+
+Comprobar
+---------
+node -v
+npm -v
+git --version
+
+Entrar al proyecto
+------------------
+cd ~/Documents/reactProjects/rbc-easy
+# o la carpeta donde hayas descomprimido este zip
+
+Instalar TODAS las dependencias de la app
+-----------------------------------------
+npm install
+
+Eso instala, desde package.json:
+
+  react
+  react-dom
+  react-router-dom
+  jszip
+  file-saver
+  decimal.js
+  lucide-react
+  vite
+  @vitejs/plugin-react
+  typescript
+  @types/react
+  @types/react-dom
+  @types/file-saver
+  @types/node
+
+Arrancar
+--------
+npm run dev
+
+Abre http://localhost:5173
+
+Build de producción
+-------------------
+npm run build
+npm run preview
+
+Subir a GitHub (ya con remote y sesión tuya)
+--------------------------------------------
+git add .
+git status
+git commit -m "RBC EASY: offline, accesos y calculadora"
+git push -u origin main
+
+Si Git pide la cuenta de otra persona:
+printf "protocol=https\nhost=github.com\n\n" | git credential-manager erase
+git push -u origin main
+
+Dependencias OPCIONALES
+-----------------------
+
+Escritorio (Electron, genera el .exe):
+npm install --save-dev electron electron-builder
+npm run build
+npx electron electron/main.cjs
+npx electron-builder --win
+
+Android (Capacitor + Android Studio):
+npm install @capacitor/core @capacitor/cli @capacitor/android
+npx cap add android
+npx cap sync android
+# Abre la carpeta android/ en Android Studio y genera el APK.
+# Si cap add pisa archivos, vuelve a copiar:
+#   android/app/src/main/AndroidManifest.xml
+#   android/app/src/main/res/xml/shortcuts.xml
+#   android/app/src/main/java/app/rbc/easy/MainActivity.java
+#   android/app/src/main/res/values/strings.xml
+
+Imágenes
+--------
+Este zip no trae los fondos. Déjalos donde ya están:
+
+  public/images/backgrounds/FCC.png
+  public/images/backgrounds/FNP.png
+  public/images/backgrounds/FSH.png
+  public/images/backgrounds/FT.png
+  public/images/backgrounds/FMA.png
+  public/images/backgrounds/MA.png
+  public/images/backgrounds/TA.png
+
+Iconos PWA (si ya los tienes):
+  public/icons/pwa/
+  public/favicon.svg
