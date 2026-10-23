@@ -3,6 +3,7 @@ import { useTheme, type Theme } from '../../hooks/useTheme';
 
 interface ThemeSwitcherProps {
   onClose?: () => void;
+  onPaper?: () => void;
 }
 
 const THEME_LABELS: Record<string, string> = {
@@ -51,7 +52,7 @@ const THEME_LABELS: Record<string, string> = {
   'cyber-y2k': 'Cyber Y2K',
 };
 
-export default function ThemeSwitcher({ onClose }: ThemeSwitcherProps) {
+export default function ThemeSwitcher({ onClose, onPaper }: ThemeSwitcherProps) {
   const { theme, setTheme, themes } = useTheme();
 
   // themes viene como { id: Theme; name: string }[]
@@ -140,7 +141,6 @@ export default function ThemeSwitcher({ onClose }: ThemeSwitcherProps) {
       `}</style>
 
       <h3>Elegir tema</h3>
-
       <div className="theme-list">
         {list.map((item) => {
           const id = typeof item === 'string' ? item : item.id;

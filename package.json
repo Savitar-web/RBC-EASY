@@ -1,23 +1,27 @@
 {
   "name": "rbc-easy",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
-    "build": "tsc -b --pretty false || true && vite build",
+    "build": "node scripts/build-audio.cjs && tsc -b --pretty false && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "typecheck": "tsc --noEmit",
     "desktop": "electron electron/main.cjs",
-    "desktop:dist": "npm run build && electron-builder",
+    "desktop:dist": "npm run build && node scripts/package-desktop.cjs",
     "android:sync": "npm run build && npx cap sync android"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",
+    "dictionary-es": "^4.0.0",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
+    "lamejs": "^1.2.1",
     "lucide-react": "^0.510.0",
+    "mespeak": "^2.0.2",
+    "nspell": "^2.1.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.4"

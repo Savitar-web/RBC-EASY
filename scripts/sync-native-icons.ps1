@@ -1,0 +1,9 @@
+Add-Type -AssemblyName System.Drawing
+$root=Split-Path -Parent $PSScriptRoot
+$source=[Drawing.Image]::FromFile((Join-Path $root 'public\icons\pwa\icon-512x512.png'))
+function Write-Size([int]$size,[string]$destination){$bitmap=[Drawing.Bitmap]::new($size,$size);$g=[Drawing.Graphics]::FromImage($bitmap);$g.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic;$g.DrawImage($source,0,0,$size,$size);$bitmap.Save($destination,[Drawing.Imaging.ImageFormat]::Png);$g.Dispose();$bitmap.Dispose()}
+$icoPng=[IO.MemoryStream]::new();$bitmap=[Drawing.Bitmap]::new(256,256);$g=[Drawing.Graphics]::FromImage($bitmap);$g.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic;$g.DrawImage($source,0,0,256,256);$bitmap.Save($icoPng,[Drawing.Imaging.ImageFormat]::Png);$g.Dispose();$bitmap.Dispose()
+$stream=[IO.File]::Create((Join-Path $root 'public\icons\windows\app-icon.ico'));$writer=[IO.BinaryWriter]::new($stream);$writer.Write([uint16]0);$writer.Write([uint16]1);$writer.Write([uint16]1);$writer.Write([byte]0);$writer.Write([byte]0);$writer.Write([byte]0);$writer.Write([byte]0);$writer.Write([uint16]1);$writer.Write([uint16]32);$writer.Write([uint32]$icoPng.Length);$writer.Write([uint32]22);$writer.Write($icoPng.ToArray());$writer.Dispose();$icoPng.Dispose()
+foreach($pair in @(@('mdpi',48),@('hdpi',72),@('xhdpi',96),@('xxhdpi',144),@('xxxhdpi',192))){$folder=Join-Path $root ('android\app\src\main\res\mipmap-'+$pair[0]);New-Item -ItemType Directory -Path $folder -Force|Out-Null;Write-Size $pair[1] (Join-Path $folder 'ic_launcher.png');Write-Size $pair[1] (Join-Path $folder 'ic_launcher_round.png')}
+$drawable=Join-Path $root 'android\app\src\main\res\drawable-nodpi';New-Item -ItemType Directory -Path $drawable -Force|Out-Null;Copy-Item -LiteralPath (Join-Path $root 'public\icons\pwa\icon-512x512.png') -Destination (Join-Path $drawable 'rbc_logo.png') -Force
+$source.Dispose()

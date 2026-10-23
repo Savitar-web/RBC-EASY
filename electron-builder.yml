@@ -8,10 +8,13 @@ files:
   - package.json
 asar: true
 win:
+  icon: public/icons/windows/app-icon.ico
   target:
     - nsis
     - portable
   artifactName: RBC-EASY-Setup.${ext}
+portable:
+  artifactName: RBC-EASY-Portable.${ext}
 nsis:
   oneClick: false
   perMachine: false

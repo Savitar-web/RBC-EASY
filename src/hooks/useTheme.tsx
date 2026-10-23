@@ -67,12 +67,17 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    return (localStorage.getItem('rbc-theme') as Theme) || 'cyberpunk';
+    try{const saved=localStorage.getItem('rbc-theme');return THEMES.some(item=>item.id===saved)?saved as Theme:'cyberpunk';}catch{return 'cyberpunk';}
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('rbc-theme', theme);
+    try{localStorage.setItem('rbc-theme', theme);}catch{}
+    const light=['light','light-academia','minimalismo-escandinavo','neumorphism','corporate-memphis','bauhaus','frutiger-aero','cottagecore'].includes(theme);
+    const hues:Partial<Record<Theme,number>>={dark:210,light:218,rainbow:270,'raygun-gothic':170,cluttercore:24,oceancore:195,spacecore:252,goblincore:90,fairycore:288,nightcore:275,'retro-cgi':165,vectorheart:340,windowscore:210,'frutiger-aero':185,vaporwave:292,y2k:228,glassmorphism:210,solarpunk:145,steampunk:35,dieselpunk:30,'cassette-futurism':40,synthwave:300,'brutalismo-digital':15,neumorphism:220,memphis:325,bauhaus:215,'art-deco':42,retrofuturismo:195,'dark-academia':38,'light-academia':30,cottagecore:135,dreamcore:265,weirdcore:325,'liminal-space':45,biopunk:130,techwear:195,'corporate-memphis':218,skeuomorphism:35,'minimalismo-escandinavo':205,maximalismo:320,'ukiyo-e-moderno':355,'cyber-y2k':185};
+    const colors=theme==='cyberpunk'?{}:{'--ui-surface':light?'rgba(246,247,249,.95)':'rgba(20,23,29,.94)','--ui-soft':light?'rgba(226,230,237,.9)':'rgba(37,42,51,.85)','--ui-field':light?'rgba(255,255,255,.94)':'rgba(12,15,20,.85)','--ui-text':light?'#1e293b':'#edf0f5','--ui-muted':light?'#475569':'#b5becb','--ui-line':light?'#33415530':'#cbd5e130','--ui-accent':`hsl(${hues[theme]??210} ${light?55:48}% ${light?37:73}%)`,'--ui-accent-ink':light?'#fff':'#11151c'};
+    for(const key of ['--ui-surface','--ui-soft','--ui-field','--ui-text','--ui-muted','--ui-line','--ui-accent','--ui-accent-ink']){if(key in colors)document.documentElement.style.setProperty(key,colors[key]);else document.documentElement.style.removeProperty(key);}
+    document.documentElement.style.colorScheme=light?'light':'dark';
   }, [theme]);
 
   const setTheme = (t: Theme) => setThemeState(t);

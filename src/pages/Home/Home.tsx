@@ -9,7 +9,8 @@ export default function Home() {
         .home-page {
   margin: 0;
   padding: 0;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -145,7 +146,7 @@ export default function Home() {
       align-items: flex-start;
     }
     .container {
-      padding-top: 35vh;
+      padding-top: 40px;
       padding-bottom: 40px;
     }
     h1 {

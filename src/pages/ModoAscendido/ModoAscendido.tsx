@@ -5,6 +5,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useWorkspaceState } from '../../hooks/useWorkspaceState';
+import glassCSS from './ascended-glass.css?inline';
 
 type View = 'calc' | 'graph' | 'matrices' | 'lineal' | 'trigo' | 'geo' | 'funciones' | 'aritmetica';
 type Kb = 'num' | 'fn' | 'abc' | 'sym';
@@ -158,7 +160,8 @@ function fromSup(s: string): string {
 function hypot(a: XY, b: XY): number { return Math.hypot(a.x - b.x, a.y - b.y); }
 function gcd(a: number, b: number): number { a = Math.abs(Math.round(a)); b = Math.abs(Math.round(b)); while (b) { const t = b; b = a % b; a = t; } return a || 1; }
 
-function evalExpr(src: string, scope: Record<string, number>, deg: boolean): number {
+function evalExpr(src: string, scope: Record<string, number>, deg: boolean, trace?: string[]): number {
+  const record = (label:string, value:number) => { if(trace) trace.push(`${label} = ${Number(value.toPrecision(14))}`); return value; };
   const s = src
     .replace(/[{[]/g, '(').replace(/[}\]]/g, ')')
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+√\(/g, (m) => `root(${fromSup(m.slice(0, -2))},`)
@@ -172,52 +175,65 @@ function evalExpr(src: string, scope: Record<string, number>, deg: boolean): num
     if (n < 0 || !Number.isInteger(n) || n > 170) throw new Error('factorial fuera de rango');
     let r = 1; for (let k = 2; k <= n; k++) r *= k; return r;
   };
-  function expr(): number { let v = term(); while (peek() === '+' || peek() === '-') { const op = eat(); const r = term(); v = op === '+' ? v + r : v - r; } return v; }
-  function term(): number { let v = pow(); while (peek() === '*' || peek() === '/') { const op = eat(); const r = pow(); v = op === '*' ? v * r : v / r; } return v; }
-  function pow(): number { let v = unary(); if (peek() === '^') { eat(); v **= pow(); } return v; }
-  function unary(): number { if (peek() === '-') { eat(); return -unary(); } if (peek() === '+') { eat(); return unary(); } return post(); }
-  function post(): number { let v = primary(); if (peek() === '!') { eat(); v = fact(v); } return v; }
+  function expr(): number {
+    let v=term(); while(peek()==='+'||peek()==='-'){const op=eat(),a=v,r=term();v=record(`${a} ${op} ${r}`,op==='+'?a+r:a-r);}return v;
+  }
+  function term(): number {
+    let v=unary();
+    while(peek()==='*'||peek()==='/'||/[a-z(]/i.test(peek()||'')){
+      const implicit=peek()!=='*'&&peek()!=='/';const op=implicit?'*':eat(),a=v,r=unary();
+      if(op==='/'&&r===0)throw new Error('No se puede dividir entre cero.');
+      v=record(`${a} ${op==='*'?'×':'÷'} ${r}`,op==='*'?a*r:a/r);
+    }return v;
+  }
+  function pow(): number {let v=post();if(peek()==='^'){eat();const power=unary();v=record(`${v} ^ ${power}`,v**power);}return v;}
+  function unary(): number {if(peek()==='-'){eat();return -unary();}if(peek()==='+'){eat();return unary();}return pow();}
+  function post(): number {let v=primary();while(peek()==='!'||peek()==='%'){const op=eat();v=record(`${v}${op}`,op==='!'?fact(v):v/100);}return v;}
   function primary(): number {
-    if (peek() === '(') { eat(); const v = expr(); if (peek() === ')') eat(); return v; }
-    if (/[0-9.]/.test(peek() || '')) { let j = i; while (/[0-9.]/.test(s[j] || '')) j++; const n = Number(s.slice(i, j)); i = j; return n; }
+    if (peek() === '(') { eat(); const v = expr(); if (peek() !== ')') throw new Error('Falta cerrar un paréntesis.'); eat(); return v; }
+    if (/[0-9.]/.test(peek() || '')) { const token=s.slice(i).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?/i); if(!token)throw new Error('Número no válido.');i+=token[0].length;return Number(token[0]); }
     if (/[a-zA-Z]/.test(peek() || '')) {
       let j = i; while (/[a-zA-Z0-9]/.test(s[j] || '')) j++;
       const id = s.slice(i, j).toLowerCase(); i = j;
-      if (id in scope) return scope[id];
+      if (Object.prototype.hasOwnProperty.call(scope,id)) return scope[id];
       if (id === 'pi') return Math.PI;
       if (id === 'e') return Math.E;
       if (peek() === '(') {
         eat();
         const args = [expr()];
         while (peek() === ',') { eat(); args.push(expr()); }
-        if (peek() === ')') eat();
+        if (peek() !== ')') throw new Error('Falta cerrar la función.'); eat();
+        if (!['min','max','gcd','lcm','mod','root'].includes(id) && args.length!==1) throw new Error(`${id} necesita un argumento.`);
+        if (['gcd','lcm','mod','root'].includes(id) && args.length!==2) throw new Error(`${id} necesita dos argumentos.`);
         const a = args[0];
         const rad = deg ? (a * Math.PI) / 180 : a;
         const back = (n: number) => (deg ? (n * 180) / Math.PI : n);
-        if (id === 'sin') return Math.sin(rad);
-        if (id === 'cos') return Math.cos(rad);
-        if (id === 'tan') return Math.tan(rad);
-        if (id === 'asin') return back(Math.asin(a));
-        if (id === 'acos') return back(Math.acos(a));
-        if (id === 'atan') return back(Math.atan(a));
-        if (id === 'sinh') return Math.sinh(a);
-        if (id === 'cosh') return Math.cosh(a);
-        if (id === 'tanh') return Math.tanh(a);
-        if (id === 'ln') return Math.log(a);
-        if (id === 'log') return Math.log10(a);
-        if (id === 'log2') return Math.log2(a);
-        if (id === 'abs') return Math.abs(a);
-        if (id === 'exp') return Math.exp(a);
-        if (id === 'floor') return Math.floor(a);
-        if (id === 'ceil') return Math.ceil(a);
-        if (id === 'round') return Math.round(a);
-        if (id === 'sign') return Math.sign(a);
-        if (id === 'min') return Math.min(...args);
-        if (id === 'max') return Math.max(...args);
-        if (id === 'mod') return a % args[1];
-        if (id === 'gcd') return gcd(a, args[1] || 1);
-        if (id === 'lcm') return Math.abs(a * args[1]) / gcd(a, args[1] || 1);
-        if (id === 'root') return Math.sign(args[1] ?? a) * Math.abs(args.length > 1 ? args[1] : a) ** (1 / (args.length > 1 ? a : 2));
+        if(id==='sqrt')return record(`√(${a})`,Math.sqrt(a));
+        if(id==='cbrt')return record(`∛(${a})`,Math.cbrt(a));
+        if (id === 'sin') return record(`sin(${args.join(', ')})`, Math.sin(rad));
+        if (id === 'cos') return record(`cos(${args.join(', ')})`, Math.cos(rad));
+        if (id === 'tan') {if(Math.abs(Math.cos(rad))<1e-14)throw new Error('La tangente no está definida en ese ángulo.');return Math.tan(rad);}
+        if (id === 'asin') return record(`asin(${args.join(', ')})`, back(Math.asin(a)));
+        if (id === 'acos') return record(`acos(${args.join(', ')})`, back(Math.acos(a)));
+        if (id === 'atan') return record(`atan(${args.join(', ')})`, back(Math.atan(a)));
+        if (id === 'sinh') return record(`sinh(${args.join(', ')})`, Math.sinh(a));
+        if (id === 'cosh') return record(`cosh(${args.join(', ')})`, Math.cosh(a));
+        if (id === 'tanh') return record(`tanh(${args.join(', ')})`, Math.tanh(a));
+        if (id === 'ln') return record(`ln(${args.join(', ')})`, Math.log(a));
+        if (id === 'log') return record(`log(${args.join(', ')})`, Math.log10(a));
+        if (id === 'log2') return record(`log2(${args.join(', ')})`, Math.log2(a));
+        if (id === 'abs') return record(`abs(${args.join(', ')})`, Math.abs(a));
+        if (id === 'exp') return record(`exp(${args.join(', ')})`, Math.exp(a));
+        if (id === 'floor') return record(`floor(${args.join(', ')})`, Math.floor(a));
+        if (id === 'ceil') return record(`ceil(${args.join(', ')})`, Math.ceil(a));
+        if (id === 'round') return record(`round(${args.join(', ')})`, Math.round(a));
+        if (id === 'sign') return record(`sign(${args.join(', ')})`, Math.sign(a));
+        if (id === 'min') return record(`min(${args.join(', ')})`, Math.min(...args));
+        if (id === 'max') return record(`max(${args.join(', ')})`, Math.max(...args));
+        if (id === 'mod') return record(`mod(${args.join(', ')})`, a % args[1]);
+        if (id === 'gcd') return record(`gcd(${args.join(', ')})`, gcd(a, args[1] ?? 1));
+        if (id === 'lcm') return record(`lcm(${args.join(', ')})`, Math.abs(a * args[1]) / gcd(a, args[1] ?? 1));
+        if (id === 'root') {const value=args[1];if(a===0 || (value<0 && (!Number.isInteger(a)||Math.abs(a%2)!==1)))throw new Error('Esta raíz no tiene un resultado real.');return Math.sign(value)*Math.abs(value)**(1/a);}
         throw new Error(id);
       }
       throw new Error(id);
@@ -225,17 +241,15 @@ function evalExpr(src: string, scope: Record<string, number>, deg: boolean): num
     throw new Error('expresión');
   }
   const v = expr();
-  if (peek()) throw new Error('expresión');
+  if (peek()) throw new Error(`Revisa la expresión cerca de «${s.slice(i,i+12)}».`);
+  if(!Number.isFinite(v))throw new Error('El resultado no es un número real finito. Revisa el dominio y los datos.');
   return v;
 }
 
-function cellNum(v: string): number {
-  const t = v.trim().replace(',', '.').replace(/−/g, '-');
-  if (!t) return 0;
-  if (t.includes('/')) { const [a, b] = t.split('/'); return Number(a) / Number(b); }
-  if (t.includes('^')) { const [a, b] = t.split('^'); return Number(a) ** Number(b); }
-  const n = Number(t);
-  return Number.isFinite(n) ? n : 0;
+function cellNum(value:string):number {
+  const text=value.trim().replace(',', '.').replace(/−/g,'-');
+  if(!text)return 0;
+  try{return evalExpr(text,{},false);}catch{return NaN;}
 }
 function det(m: number[][]): number {
   const n = m.length;
@@ -461,102 +475,99 @@ function extremaOf(expr: string, deg: boolean, param: number): XY[] {
   return out.slice(0, 10);
 }
 
-export default function ModoAscendido() {
-  const navigate = useNavigate();
-  const [view, setView] = useState<View>('calc');
-  const [menu, setMenu] = useState(false);
-  const [modMenu, setModMenu] = useState(false);
-  const [deg, setDeg] = useState(true);
-  return (
-    <>
-      <style>{CSS}</style>
-      <div className="ma">
-        <header className="head">
-          <button type="button" className="icon" onClick={() => navigate('/calcular')} aria-label="Volver">←</button>
-          <h1>Modo ascendido</h1>
-          <div className="menu-wrap">
-            <button type="button" className="chip on" onClick={() => { setModMenu((s) => !s); setMenu(false); }}>Herramientas ▾</button>
-            {modMenu && <div className="drop">{VIEWS.map((v) => <button key={v.id} type="button" onClick={() => { setView(v.id); setModMenu(false); }}>{v.name}</button>)}</div>}
-          </div>
-          <div className="menu-wrap">
-            <button type="button" className="chip" onClick={() => { setMenu((s) => !s); setModMenu(false); }}>Módulos ▾</button>
-            {menu && <div className="drop">{LINKS.map((l) => <button key={l.path} type="button" onClick={() => navigate(l.path)}>{l.name}</button>)}</div>}
-          </div>
-          <button type="button" className="chip on" onClick={() => setDeg((d) => !d)}>{deg ? 'DEG' : 'RAD'}</button>
-        </header>
-        {view === 'calc' && <Calculator deg={deg} />}
-        {view === 'graph' && <GraphStudio deg={deg} />}
-        {view === 'matrices' && <MatrixStudio />}
-        {view === 'lineal' && <SystemSolver />}
-        {view === 'aritmetica' && <FormulaLab title="Aritmética" items={ARITH} />}
-        {view === 'trigo' && <FormulaLab title="Trigonometría" items={TRIG} />}
-        {view === 'geo' && <FormulaLab title="Geometría" items={GEOM} />}
-        {view === 'funciones' && <FormulaLab title="Funciones" items={FUNCS} />}
-      </div>
-    </>
-  );
+const VIEW_INFO: Record<View,{name:string;subtitle:string;guide:string;example:string}> = {
+  calc:{name:'Calculadora científica',subtitle:'Escribe, calcula y revisa cada operación.',guide:'Se resuelven primero paréntesis y funciones, después potencias, productos y cocientes, y al final sumas y restas. El porcentaje divide entre 100. DEG interpreta los ángulos en grados; RAD, en radianes. Las raíces pares de números negativos no pertenecen al dominio real.',example:'2(3 + 4)^2 · sin(30) · root(3, -8)'},
+  graph:{name:'Estudio de gráficas',subtitle:'Explora curvas y construcciones en un mismo plano.',guide:'Escribe una función de x y pulsa Enter. Arrastra para mover el plano; usa la rueda o el gesto de pinza para acercarte. Las herramientas se agrupan por operación: toca de nuevo una herramienta para abrir su grupo. Las distancias del plano son unidades de coordenadas, no una escala física del dispositivo.',example:'sin(x) · x^2 - 4 · exp(-x^2)'},
+  matrices:{name:'Laboratorio de matrices',subtitle:'Álgebra matricial con resultados y desarrollo.',guide:'Define las dimensiones y crea una matriz. Selecciona una celda, introduce un número o una fracción y guárdala. Sumar y restar requiere dimensiones iguales; A×B requiere que las columnas de A coincidan con las filas de B. Sólo las matrices cuadradas con determinante distinto de cero tienen inversa.',example:'Matriz identidad 3×3 · determinante · inversa · Gauss-Jordan'},
+  lineal:{name:'Ecuaciones y sistemas',subtitle:'Del planteamiento a la comprobación de la solución.',guide:'Escribe cada ecuación con sus incógnitas y un signo igual. Gauss-Jordan identifica pivotes y permite distinguir soluciones únicas, infinitas o sistemas incompatibles. En ecuaciones de segundo grado, a debe ser distinto de cero; el discriminante b²−4ac determina el tipo de raíces.',example:'2x + y = 7; x - y = 2 · x² - 3x + 2 = 0'},
+  aritmetica:{name:'Aritmética aplicada',subtitle:'Porcentajes, proporciones y operaciones esenciales.',guide:'Elige una operación y completa todos sus datos. Un porcentaje p equivale a p/100; verifica siempre a qué cantidad se aplica. En proporciones y fracciones los denominadores no pueden valer cero. Las cantidades deben compartir unidades para que la comparación tenga sentido.',example:'15 % de 240 · descuento del 20 % · regla de tres'},
+  trigo:{name:'Trigonometría',subtitle:'Ángulos, razones y triángulos explicados.',guide:'En este laboratorio los datos angulares se expresan en grados, como indican las fórmulas. Comprueba que los lados son positivos y cumplen la desigualdad triangular. En las funciones inversas, seno y coseno sólo admiten valores entre −1 y 1; una tangente puede no estar definida.',example:'sin(30°) = 0.5 · Pitágoras · ley de cosenos'},
+  geo:{name:'Geometría',subtitle:'Medidas, áreas y volúmenes con interpretación.',guide:'Utiliza la misma unidad de longitud en todos los datos. Las áreas se expresan en unidades cuadradas y los volúmenes en unidades cúbicas. Radios, alturas y longitudes deben ser positivos. Revisa si la fórmula usa radio o diámetro antes de sustituir los valores.',example:'Área del círculo = πr² · volumen de un cilindro = πr²h'},
+  funciones:{name:'Análisis de funciones',subtitle:'Derivadas, integrales y aproximaciones numéricas.',guide:'Las funciones de cálculo usan radianes. La derivada describe cambio instantáneo y la integral definida representa área con signo. Los métodos numéricos dan aproximaciones: comprueba continuidad, dominio e intervalo. En bisección, los extremos deben encerrar un cambio de signo; una integral indefinida incluye la constante C.',example:'Derivar 3x^2 + sin(x) · integrar x^2 · ceros de x^2 - 2'},
+};
+function downloadData(name:string,body:string,type='text/plain;charset=utf-8') {
+  const href=URL.createObjectURL(new Blob([body],{type}));const a=document.createElement('a');a.href=href;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(href),1000);
 }
-
-function Calculator({ deg }: { deg: boolean }) {
-  const [expr, setExpr] = useState('');
-  const [res, setRes] = useState('0');
-  const [expMode, setExpMode] = useState(false);
-  const [guide, setGuide] = useState('xʸ abre un cuadro para escribir el exponente.');
-  const [memory, setMemory] = useState(0);
-  const [ans, setAns] = useState(0);
-  const [askExp, setAskExp] = useState(false);
-  const put = (token: string) => {
-    if (token === 'C') { setExpr(''); setRes('0'); setExpMode(false); return; }
-    if (token === '⌫') { setExpr((s) => s.slice(0, -1)); return; }
-    if (token === 'MC') { setMemory(0); return; }
-    if (token === 'MR') { setExpr((s) => s + String(memory)); return; }
-    if (token === 'M+') { setMemory((m) => m + (Number(res) || 0)); return; }
-    if (token === 'M−') { setMemory((m) => m - (Number(res) || 0)); return; }
-    if (token === 'ANS') { setExpr((s) => s + String(ans)); return; }
-    if (token === '=') {
-      try {
-        const value = evalExpr(expr || '0', { ans }, deg);
-        setRes(String(Number(value.toPrecision(14))));
-        setAns(value);
-        setGuide(expr || '0');
-      } catch (e) { setGuide(e instanceof Error ? e.message : 'error'); }
-      setExpMode(false);
-      return;
-    }
-    if (token === 'xʸ') { setAskExp(true); return; }
-    if (expMode && /^[0-9.-]$/.test(token)) { setExpr((s) => s + toSup(token === '-' ? '-' : token)); return; }
-    setExpMode(false);
-    const map: Record<string, string> = { '÷': '/', '×': '*', '−': '-', 'n!': '!' };
-    setExpr((s) => s + (map[token] ?? token));
-  };
-  const fns = ['sin(', 'cos(', 'tan(', 'asin(', 'acos(', 'atan(', 'sinh(', 'cosh(', 'tanh(', 'ln(', 'log(', 'log2(', '√(', '∛(', 'xʸ', 'n!', 'abs(', 'exp(', 'floor(', 'ceil(', 'mod(', 'gcd(', 'lcm(', 'min(', 'max(', 'π', 'e'];
-  const keys = [
-    { k: 'C', c: 'danger' }, { k: '⌫', c: 'warn' }, { k: '(', c: 'op' }, { k: ')', c: 'op' },
-    { k: '7', c: 'num' }, { k: '8', c: 'num' }, { k: '9', c: 'num' }, { k: '÷', c: 'op' },
-    { k: '4', c: 'num' }, { k: '5', c: 'num' }, { k: '6', c: 'num' }, { k: '×', c: 'op' },
-    { k: '1', c: 'num' }, { k: '2', c: 'num' }, { k: '3', c: 'num' }, { k: '−', c: 'op' },
-    { k: '0', c: 'num' }, { k: '.', c: 'num' }, { k: '%', c: 'op' }, { k: '+', c: 'op' },
-  ];
-  return (
-    <section className="calc">
-      <div className="shell">
-        <div className="readout">
-          <div className="expr">{expr || '0'}{expMode && <sup className="caret">□</sup>}</div>
-          <strong>{res}</strong>
-          <p>{guide}</p>
-        </div>
-        <div className="mem">
-          {['MC', 'MR', 'M+', 'M−', 'ANS'].map((k) => <button key={k} type="button" onClick={() => put(k)}>{k}</button>)}
-        </div>
-        <div className="fn">{fns.map((f) => <button key={f} type="button" onClick={() => put(f)}>{f.replace('(', '')}</button>)}</div>
-        <div className="pad">
-          {keys.map((b) => <button key={b.k} type="button" className={b.c} onClick={() => put(b.k)}>{b.k}</button>)}
-        </div>
-        <button type="button" className="eq" onClick={() => put('=')}>=</button>
+async function copyValue(text:string,onStatus:(value:string)=>void) {try{await navigator.clipboard.writeText(text);onStatus('Copiado al portapapeles.');}catch{onStatus('No se pudo copiar. Puedes seleccionar el texto o descargarlo.');}}
+export default function ModoAscendido() {
+  const navigate=useNavigate();
+  const [savedView,setView]=useWorkspaceState<View>('view','calc');
+  const view=VIEWS.some(item=>item.id===savedView)?savedView:'calc';
+  const [deg,setDeg]=useWorkspaceState('degrees',true);
+  const [menu,setMenu]=useState(false),[query,setQuery]=useState(''),[help,setHelp]=useState(false),[status,setStatus]=useState('');
+  const info=VIEW_INFO[view];
+  useEffect(()=>{
+    const key=(event:KeyboardEvent)=>{if(event.altKey&&!event.ctrlKey&&/^[1-8]$/.test(event.key)){event.preventDefault();setView(VIEWS[Number(event.key)-1].id);}if(event.key==='Escape'){setMenu(false);setHelp(false);}};
+    window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
+  },[setView]);
+  return <><style>{CSS}</style><style>{glassCSS}</style><div className={`ma ma-modern ma-view-${view}`}>
+    <header className="head">
+      <button type="button" className="icon" onClick={()=>navigate('/calcular')} aria-label="Volver a la calculadora">←</button>
+      <div className="ma-brand"><span>RBC EASY / LABORATORIO</span><h1>Modo ascendido</h1></div>
+      <div className="ma-head-actions">
+        <button type="button" className="chip" title="Unidad angular de calculadora y gráfica" onClick={()=>setDeg(value=>!value)}>{deg?'DEG':'RAD'}</button>
+        <div className="menu-wrap"><button type="button" className="chip" aria-expanded={menu} onClick={()=>setMenu(!menu)}>Módulos ▾</button>{menu&&<div className="drop">{LINKS.map(link=><button type="button" key={link.path} onClick={()=>navigate(link.path)}>{link.name}</button>)}<button type="button" onClick={()=>{try{const data=Object.fromEntries(Object.keys(localStorage).filter(key=>key.startsWith('ascended:')).map(key=>[key,JSON.parse(localStorage.getItem(key)||'null')]));downloadData('RBC-laboratorio.json',JSON.stringify({version:1,data},null,2),'application/json');setMenu(false);}catch{setStatus('No se pudo exportar la sesión.');}}}>Descargar sesión</button></div>}</div>
       </div>
-      {askExp && <ExpModal base={expr || '0'} onClose={() => setAskExp(false)} onOk={(exp) => { setExpr((s) => (s || '0') + toSup(exp)); setAskExp(false); setGuide(`Exponente ${exp} aplicado a la entrada.`); }} />}
-    </section>
-  );
+    </header>
+    <aside className="ma-navigation" aria-label="Navegación del laboratorio">
+      <label className="ma-tool-search"><span>HERRAMIENTAS</span><input type="search" aria-label="Buscar herramienta" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar herramienta…" /></label>
+      <nav className="workspace-tabs" aria-label="Herramientas de modo ascendido">{VIEWS.filter(item=>`${item.name} ${VIEW_INFO[item.id].subtitle}`.toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es'))).map(item=><button key={item.id} type="button" aria-pressed={view===item.id} title={`Alt+${VIEWS.indexOf(item)+1}`} onClick={()=>{setView(item.id);setHelp(false);}}><span className="ma-nav-number">{String(VIEWS.indexOf(item)+1).padStart(2,'0')}</span><span><strong>{item.name}</strong><small>{VIEW_INFO[item.id].subtitle}</small></span></button>)}</nav>
+      <p className="ma-local-note">Tu trabajo se guarda en este dispositivo.</p>
+      <button type="button" className="ma-backup" onClick={()=>{
+        const data=Object.fromEntries(Object.keys(localStorage).filter(key=>key.startsWith('ascended:')).map(key=>[key,JSON.parse(localStorage.getItem(key)||'null')]));downloadData('RBC-laboratorio.json',JSON.stringify({version:1,data},null,2),'application/json');setStatus('Sesión descargada con cálculos, matrices y gráficas.');
+      }}>Descargar sesión</button>
+    </aside>
+    <main className="ma-workspace">
+      <div className="ma-context"><div><span className="ma-eyebrow">ESPACIO DE TRABAJO</span><h2>{info.name}</h2><p>{info.subtitle}</p></div><button type="button" className="chip" aria-expanded={help} onClick={()=>setHelp(!help)}>{help?'Ocultar guía':'Cómo se usa'}</button></div>
+      {help&&<section className="ma-guide" aria-label="Guía de la herramienta"><h3>Antes de empezar</h3><p>{info.guide}</p><p><strong>Ejemplo:</strong> {info.example}</p><p>Los cálculos usan precisión numérica de JavaScript; revisa el redondeo y las unidades al interpretar el resultado.</p></section>}
+      {status&&<p className="ma-status" role="status">{status}</p>}
+      {view==='calc'&&<Calculator deg={deg}/>}{view==='graph'&&<GraphStudio deg={deg}/>}{view==='matrices'&&<MatrixStudio/>}{view==='lineal'&&<SystemSolver/>}
+      {view==='aritmetica'&&<FormulaLab key="arith" title="Aritmética" items={ARITH}/>}{view==='trigo'&&<FormulaLab key="trig" title="Trigonometría" items={TRIG}/>}{view==='geo'&&<FormulaLab key="geom" title="Geometría" items={GEOM}/>}{view==='funciones'&&<FormulaLab key="func" title="Funciones" items={FUNCS}/>}
+    </main>
+  </div></>;
+}
+type Calculation = {expression:string;result:string;steps:string[];degrees:boolean;time:number};
+function Calculator({deg}:{deg:boolean}) {
+  const [expr,setExpr]=useWorkspaceState('expression',''),[res,setRes]=useWorkspaceState('result','0');
+  const [memory,setMemory]=useWorkspaceState('memory',0),[ans,setAns]=useWorkspaceState('answer',0);
+  const [history,setHistory]=useWorkspaceState<Calculation[]>('history',[]);
+  const [steps,setSteps]=useState<string[]>([]),[guide,setGuide]=useState('Enter calcula. Esc limpia la entrada. Puedes escribir directamente.');
+  const [error,setError]=useWorkspaceState('calc-error','');
+  const [askExp,setAskExp]=useState(false),[historyOpen,setHistoryOpen]=useState(false);
+  const input=useRef<HTMLInputElement>(null);
+  const put=(token:string)=>{
+    setError('');
+    if(token==='C'){setExpr('');setRes('0');setSteps([]);return;}
+    if(token==='MC'){setMemory(0);setGuide('Memoria borrada.');return;}
+    if(token==='M+'||token==='M−'){const value=Number(res);if(Number.isFinite(value))setMemory(m=>m+(token==='M+'?value:-value));return;}
+    if(token==='='){
+      try{const development:string[]=[];const value=evalExpr(expr||'0',{ans},deg,development);const result=String(Number(value.toPrecision(14)));setRes(result);setAns(value);setSteps(development);setGuide(`Resultado en modo ${deg?'grados':'radianes'}.`);setHistory(old=>[{expression:expr||'0',result,steps:development,degrees:deg,time:Date.now()},...old].slice(0,40));}
+      catch(problem){setError(problem instanceof Error?problem.message:'Revisa la expresión.');}return;
+    }
+    if(token==='xʸ'){setAskExp(true);return;}
+    const value=token==='MR'?String(memory):token==='ANS'?String(ans):({'÷':'/','×':'*','−':'-','n!':'!'}[token]||token);
+    const element=input.current,start=element?.selectionStart??expr.length,end=element?.selectionEnd??expr.length;
+    const from=token==='⌫'&&start===end?Math.max(0,start-1):start;
+    setExpr(expr.slice(0,from)+(token==='⌫'?'':value)+expr.slice(end));
+    requestAnimationFrame(()=>{element?.focus();const cursor=from+(token==='⌫'?0:value.length);element?.setSelectionRange(cursor,cursor);});
+  };
+  const keys=['C','⌫','(',')','7','8','9','÷','4','5','6','×','1','2','3','−','0','.','%','+'];
+  const fns=['sin(','cos(','tan(','asin(','acos(','atan(','ln(','log(','log2(','√(','∛(','xʸ','n!','abs(','exp(','floor(','ceil(','mod(','gcd(','lcm(','min(','max(','π','e',','];
+  return <section className="calc ma-calculator"><div className="shell">
+    <div className="readout"><div className="ma-display-label"><span>EXPRESIÓN EDITABLE</span><span>{deg?'DEG':'RAD'} · M {memory!==0?'●':'○'}</span></div>
+      <input ref={input} className="ma-expression" aria-label="Expresión científica" value={expr} onChange={event=>{setExpr(event.target.value);setError('');}} onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();put('=');}if(event.key==='Escape'){event.preventDefault();put('C');}}} placeholder="0" autoComplete="off" autoCapitalize="off" spellCheck={false}/>
+      <strong aria-label="Resultado">{error?'—':res}</strong><p role={error?'alert':'status'} className={error?'ma-error':''}>{error||guide}</p>
+    </div>
+    <div className="mem">{['MC','MR','M+','M−','ANS'].map(key=><button type="button" key={key} title={{MC:'Borrar memoria',MR:'Insertar memoria','M+':'Sumar a memoria','M−':'Restar de memoria',ANS:'Insertar último resultado'}[key]} onClick={()=>put(key)}>{key}</button>)}</div>
+    <details className="ma-functions"><summary>Funciones científicas <span>Trigonometría, potencias y más</span></summary><div className="fn">{fns.map(fn=><button type="button" key={fn} onClick={()=>put(fn)}>{fn.replace('(','')}</button>)}</div></details>
+    <div className="pad">{keys.map(key=><button key={key} type="button" className={key==='C'?'danger':key==='⌫'?'warn':/[0-9.]/.test(key)?'num':'op'} onClick={()=>put(key)}>{key}</button>)}</div>
+    <div className="ma-calc-actions"><button type="button" className="ma-secondary" onClick={()=>copyValue(res,setGuide)}>Copiar resultado</button><button type="button" className="eq" onClick={()=>put('=')}>=</button></div>
+    <details className="ma-explanation" open={steps.length>0}><summary>Desarrollo de la operación</summary>{steps.length?<ol>{steps.map((step,index)=><li key={index}>{step}</li>)}</ol>:<p>Calcula una expresión para ver el orden de sus operaciones. Los signos, paréntesis y la unidad angular forman parte del cálculo.</p>}</details>
+  </div><aside className="ma-history"><div className="ma-history-heading"><h3>Historial de trabajo</h3><button type="button" className="chip" onClick={()=>setHistoryOpen(!historyOpen)}>{historyOpen?'Contraer':'Ver historial'}</button></div><p>Recupera una expresión para editarla o copia su resultado. Se conservan los últimos 40 cálculos.</p>
+    <div className={historyOpen?'ma-history-list open':'ma-history-list'}>{history.length?history.map(item=><article key={item.time}><button type="button" className="ma-history-expression" onClick={()=>{setExpr(item.expression);setRes(item.result);setSteps(item.steps);}}><span>{item.expression}</span><strong>= {item.result}</strong><small>{item.degrees?'Grados':'Radianes'} · {new Date(item.time).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}</small></button><button type="button" className="ma-secondary" onClick={()=>copyValue(item.result,setGuide)}>Copiar</button></article>):<p>Aún no hay operaciones guardadas.</p>}</div>
+    {history.length>0&&<div className="ops"><button type="button" onClick={()=>downloadData('RBC-calculos.txt',history.map(item=>`${item.expression} = ${item.result} (${item.degrees?'DEG':'RAD'})\n${item.steps.join('\n')}`).join('\n\n'))}>Descargar historial</button><button type="button" onClick={()=>{if(window.confirm('¿Borrar el historial de cálculos?'))setHistory([]);}}>Borrar</button></div>}
+    <div className="ma-example-card"><span>PRUEBA UNA EXPRESIÓN</span>{['2(3 + 4)^2','sin(30)','root(3,-8)','250*15%'].map(example=><button key={example} type="button" onClick={()=>{setExpr(example);input.current?.focus();}}>{example}</button>)}</div>
+  </aside>{askExp&&<ExpModal base={expr||'0'} onClose={()=>setAskExp(false)} onOk={exponent=>{setExpr((expr||'0')+toSup(exponent));setAskExp(false);}}/>}</section>;
 }
 
 function GraphStudio({ deg }: { deg: boolean }) {
@@ -566,19 +577,37 @@ function GraphStudio({ deg }: { deg: boolean }) {
   const drag = useRef<null | { kind: 'pan' | 'point' | 'draw'; x: number; y: number; box: Box; id?: string; pts: XY[] }>(null);
   const ptrs = useRef<Map<number, XY>>(new Map());
   const pinch = useRef<null | { d: number; box: Box }>(null);
-  const [draft, setDraft] = useState('sin(x^2)');
-  const [curves, setCurves] = useState<Curve[]>([{ id: 'c1', expr: 'sin(x^2)', color: COLORS[0], on: true }]);
-  const [box, setBox] = useState<Box>({ x0: -8, x1: 8, y0: -5, y1: 5 });
+  const [draft, setDraft] = useWorkspaceState('graph-draft','sin(x^2)');
+  const [curves, setCurves] = useWorkspaceState<Curve[]>('curves',[{ id: 'c1', expr: 'sin(x^2)', color: COLORS[0], on: true }]);
+  const [box, setBox] = useWorkspaceState<Box>('graph-box',{ x0: -8, x1: 8, y0: -5, y1: 5 });
+  const [editingCurve,setEditingCurve]=useState<string|null>(null);
   const [param, setParam] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [kb, setKb] = useState<Kb>('num');
-  const [kbOpen, setKbOpen] = useState(true);
-  const [bg, setBg] = useState<Bg>('default');
+  const [kbOpen, setKbOpen] = useState(false);
+  const [bg, setBg] = useWorkspaceState<Bg>('graph-background','default');
+  const [fullscreen,setFullscreen] = useState(false), [templates,setTemplates] = useState(false), [objects,setObjects] = useState(false);
+  const [size,setSize] = useState({width:800,height:500});
+  useEffect(()=>{const node=canvas.current?.parentElement;if(!node)return;const observer=new ResizeObserver(([entry])=>{const {width,height}=entry.contentRect;if(width>0&&height>0)setSize({width,height});});observer.observe(node);return()=>observer.disconnect();},[]);
+  useEffect(()=>{const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){setFullscreen(false);setTemplates(false);setMenuPos(null);}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[]);
+  useEffect(()=>{setBox(previous=>{const center=(previous.y0+previous.y1)/2;const half=(previous.x1-previous.x0)*size.height/size.width/2;return {...previous,y0:center-half,y1:center+half};});},[size.width,size.height]);
+  const fitView=(span=16)=>{const width=Math.max(span,span*size.width/size.height);const half=width*size.height/size.width/2;setBox({x0:-width/2,x1:width/2,y0:-half,y1:half});};
+  const presets = [
+    {name:'Circunferencia',formula:'x² + y² = 9',expressions:['sqrt(9-x^2)','-sqrt(9-x^2)'],path:'M50 15a35 35 0 1 0 0 70a35 35 0 1 0 0-70',note:'Radio 3; centro (0, 0). Se importan las dos semicircunferencias.',span:9},
+    {name:'Elipse',formula:'x²/16 + y²/4 = 1',expressions:['2*sqrt(1-x^2/16)','-2*sqrt(1-x^2/16)'],path:'M10 50a40 23 0 1 0 80 0a40 23 0 1 0-80 0',note:'Semiejes 4 y 2; focos (±√12, 0).',span:11},
+    {name:'Parábola y tangente',formula:'f(x) = x²; t(x) = 2x − 1',expressions:['x^2','2*x-1'],path:'M15 10Q50 160 85 10M15 90L85 20',note:'Tangente en (1, 1); pendiente f′(1) = 2.',span:10},
+    {name:'Hipérbola',formula:'x²/4 − y² = 1',expressions:['sqrt(x^2/4-1)','-sqrt(x^2/4-1)','x/2','-x/2'],path:'M5 10Q70 50 5 90M95 10Q30 50 95 90',note:'Vértices (±2, 0) y asíntotas y = ±x/2.',span:12},
+    {name:'Ondas armónicas',formula:'sin(x), cos(x)',expressions:deg?['sin(x*180/pi)','cos(x*180/pi)']:['sin(x)','cos(x)'],path:'M0 50Q25 0 50 50T100 50',note:'Período espacial 2π. La conversión angular está incluida si usas DEG.',span:16},
+    {name:'Distribución normal',formula:'exp(−x²/2) / √(2π)',expressions:['exp(-x^2/2)/sqrt(2*pi)'],path:'M5 85C30 85 30 15 50 15S70 85 95 85',note:'Densidad normal estándar: media 0 y desviación típica 1.',span:8},
+    {name:'Cúbica y derivada',formula:'f(x) = x³ − 3x; f′(x) = 3x² − 3',expressions:['x^3-3*x','3*x^2-3'],path:'M15 90C25-30 75 130 85 10',note:'Puntos críticos x = ±1. Las raíces de la derivada marcan extremos.',span:10},
+    {name:'Valor absoluto',formula:'|x|, x, −x',expressions:['abs(x)','x','-x'],path:'M10 10L50 85L90 10',note:'Función continua con cambio de pendiente en x = 0.',span:12},
+  ];
+  const importPreset=(preset:typeof presets[number])=>{setCurves(list=>[...list,...preset.expressions.filter(expr=>!list.some(c=>c.expr===expr)).map((expr,index)=>({id:crypto.randomUUID(),expr,color:COLORS[(list.length+index)%COLORS.length],on:true}))]);fitView(preset.span);setTemplates(false);setObjects(true);setNote(`${preset.name}: ${preset.note}`);};
   const [tool, setTool] = useState('select');
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [menuPos, setMenuPos] = useState<{ x: number; y: number; name: string } | null>(null);
-  const [points, setPoints] = useState<Pt[]>([]);
-  const [shapes, setShapes] = useState<Sh[]>([]);
+  const [points, setPoints] = useWorkspaceState<Pt[]>('points',[]);
+  const [shapes, setShapes] = useWorkspaceState<Sh[]>('shapes',[]);
   const [pending, setPending] = useState<Pt[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [note, setNote] = useState('Mueve: arrastra un punto o el fondo.');
@@ -947,17 +976,20 @@ function GraphStudio({ deg }: { deg: boolean }) {
   useEffect(() => {
     const c = canvas.current; if (!c) return;
     const ctx = c.getContext('2d'); if (!ctx) return;
-    const w = c.width; const h = c.height;
+    const ratio=Math.min(window.devicePixelRatio||1,2);
+    c.width=Math.round(size.width*ratio);c.height=Math.round(size.height*ratio);
+    ctx.setTransform(ratio,0,0,ratio,0,0);
+    const w = size.width; const h = size.height;
     ctx.clearRect(0, 0, w, h);
-    if (bg === 'white') { ctx.fillStyle = '#f7f7f8'; ctx.fillRect(0, 0, w, h); }
-    if (bg === 'black') { ctx.fillStyle = '#07070c'; ctx.fillRect(0, 0, w, h); }
+
+
     const sx = (x: number) => ((x - box.x0) / (box.x1 - box.x0)) * w;
     const sy = (y: number) => h - ((y - box.y0) / (box.y1 - box.y0)) * h;
     const dark = bg === 'white';
     ctx.strokeStyle = dark ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.14)';
     ctx.lineWidth = 1;
-    const xStep = box.x1 - box.x0 > 40 ? 5 : box.x1 - box.x0 > 20 ? 2 : 1;
-    const yStep = box.y1 - box.y0 > 30 ? 5 : box.y1 - box.y0 > 16 ? 2 : 1;
+    const gridStep=(span:number,pixels:number)=>{const raw=span/Math.max(2,pixels/65);const magnitude=10**Math.floor(Math.log10(raw));return [1,2,5,10].find(n=>n*magnitude>=raw)!*magnitude;};
+    const xStep=gridStep(box.x1-box.x0,w),yStep=gridStep(box.y1-box.y0,h);
     for (let x = Math.ceil(box.x0 / xStep) * xStep; x <= box.x1; x += xStep) { ctx.beginPath(); ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), h); ctx.stroke(); }
     for (let y = Math.ceil(box.y0 / yStep) * yStep; y <= box.y1; y += yStep) { ctx.beginPath(); ctx.moveTo(0, sy(y)); ctx.lineTo(w, sy(y)); ctx.stroke(); }
     ctx.strokeStyle = dark ? '#222' : 'rgba(255,255,255,.85)';
@@ -969,7 +1001,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
     ctx.beginPath(); ctx.moveTo(w - 8, ay); ctx.lineTo(w - 18, ay - 6); ctx.lineTo(w - 18, ay + 6); ctx.closePath(); ctx.fill();
     const axisNum = (text: string, x: number, y: number) => {
       ctx.save();
-      ctx.font = '600 26px system-ui, sans-serif';
+      ctx.font = '500 12px system-ui, sans-serif';
       const g = ctx.createLinearGradient(x, y - 22, x, y + 2);
       g.addColorStop(0, '#ffd0d0');
       g.addColorStop(0.45, '#ff4d4d');
@@ -980,7 +1012,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
     };
     const label = (text: string, x: number, y: number) => {
       ctx.save();
-      ctx.font = '600 18px system-ui, sans-serif';
+      ctx.font = '600 13px system-ui, sans-serif';
       const g = ctx.createLinearGradient(x, y - 16, x, y + 2);
       g.addColorStop(0, '#ffc4c4');
       g.addColorStop(1, '#e11d2e');
@@ -990,8 +1022,8 @@ function GraphStudio({ deg }: { deg: boolean }) {
       ctx.fillText(text, x, y);
       ctx.restore();
     };
-    for (let x = Math.ceil(box.x0 / xStep) * xStep; x <= box.x1; x += xStep) if (x !== 0) axisNum(String(x), sx(x) + 6, Math.min(h - 10, Math.max(30, sy(0) + 26)));
-    for (let y = Math.ceil(box.y0 / yStep) * yStep; y <= box.y1; y += yStep) if (y !== 0) axisNum(String(y), Math.min(w - 42, Math.max(8, sx(0) + 8)), sy(y) - 4);
+    for (let x = Math.ceil(box.x0 / xStep) * xStep; x <= box.x1; x += xStep) if (x !== 0) axisNum(String(Number(x.toPrecision(6))), sx(x) + 6, Math.min(h - 10, Math.max(30, sy(0) + 26)));
+    for (let y = Math.ceil(box.y0 / yStep) * yStep; y <= box.y1; y += yStep) if (y !== 0) axisNum(String(Number(y.toPrecision(6))), Math.min(w - 42, Math.max(8, sx(0) + 8)), sy(y) - 4);
     const at = (id: string) => points.find((p) => p.id === id);
     curves.filter((cv) => cv.on).forEach((cv) => {
       ctx.beginPath(); ctx.strokeStyle = cv.color; ctx.lineWidth = 2.6; let started = false;
@@ -999,6 +1031,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
         const x = box.x0 + ((box.x1 - box.x0) * i) / w;
         let y = NaN; try { y = evalExpr(cv.expr, { x, a: param }, deg); } catch { y = NaN; }
         if (!Number.isFinite(y)) { started = false; continue; }
+        if (Math.abs(sy(y))>h*8) {started=false;continue;}
         if (!started) { ctx.moveTo(sx(x), sy(y)); started = true; } else ctx.lineTo(sx(x), sy(y));
       }
       ctx.stroke();
@@ -1091,7 +1124,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
       if (p.showLabel !== false) label(p.label, sx(p.x) + 10, sy(p.y) - 10);
     });
-  }, [curves, box, param, deg, bg, points, shapes, selected, ink, styleColor]);
+  }, [curves, box, param, deg, bg, points, shapes, selected, ink, styleColor, size]);
 
   const centerOn = (expr: string) => {
     const s = sampleFn(expr, deg, param, { x0: -20, x1: 20, y0: -20, y1: 20 });
@@ -1111,8 +1144,12 @@ function GraphStudio({ deg }: { deg: boolean }) {
     setDraft((s) => s + (map[token] ?? token));
   };
   const addCurve = () => {
-    const clean = draft.trim();
+    const clean = draft.trim().replace(/^(?:y|f\(x\))\s*=\s*/i,'');
     if (!clean) return;
+    let valid=false;let message='';for(const x of [0,1,-1,2,-2,5,10,100]){try{evalExpr(clean,{x,a:param},deg);valid=true;break;}catch(problem){message=String(problem);}}
+    if(!valid){setNote(`Revisa la función o su dominio: ${message}`);return;}
+    setNote(`${editingCurve?'Actualizada':'Añadida'}: y = ${clean}`);setDraft('');
+    if(editingCurve){setCurves(list=>list.map(curve=>curve.id===editingCurve?{...curve,expr:clean}:curve));setEditingCurve(null);return;}
     setCurves((list) => list.some((c) => c.expr === clean) ? list : [...list, { id: String(Date.now()), expr: clean, color: COLORS[list.length % COLORS.length], on: true }]);
   };
   const nums = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', 'π'];
@@ -1125,7 +1162,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
   const needsExtra = ['circleR', 'segmentLen', 'regular', 'angleAmp', 'rotate', 'homothety'].includes(tool);
 
   return (
-    <section className={`graph${kbOpen ? ' kb-on' : ''}`}>
+    <section className={`graph${kbOpen ? ' kb-on' : ''}${fullscreen?' graph-fullscreen':''}${objects?' objects-open':''}`} aria-label="Laboratorio gráfico">
       <div className="toolbar">
         <div className="toolbar-row">
           {GROUPS.map((g) => {
@@ -1143,15 +1180,23 @@ function GraphStudio({ deg }: { deg: boolean }) {
                     setPending([]);
                     setNote(`${current.label}. Vuelve a tocar el icono para ver el resto del grupo.`);
                   }
-                }}><ToolIcon id={current.id} /></button>
+                }}><ToolIcon id={current.id} /><span>{g.name}</span></button>
             );
           })}
           <button type="button" title={kbOpen ? 'Ocultar teclado' : 'Mostrar teclado'} onClick={() => setKbOpen((s) => !s)} aria-label="Teclado">
             <SvgKeyboard off={!kbOpen} />
           </button>
-          <button type="button" title="Fondo" onClick={() => setBg((b) => b === 'default' ? 'white' : b === 'white' ? 'black' : 'default')} aria-label="Fondo">
-            <SvgBg mode={bg} />
+          <button type="button" title="Cambiar fondo: original, blanco o negro" onClick={() => setBg((b) => b === 'default' ? 'white' : b === 'white' ? 'black' : 'default')} aria-label="Fondo">
+            <SvgBg mode={bg} /><span>{bg==='white'?'Blanco':bg==='black'?'Negro':'Fondo'}</span>
           </button>
+        </div>
+        <div className="ma-graph-actions">
+          <button type="button" onClick={()=>setTemplates(true)}>Plantillas</button>
+          <button type="button" aria-pressed={objects} onClick={()=>setObjects(!objects)}>Funciones · {curves.length}</button>
+          <button type="button" onClick={()=>setFullscreen(!fullscreen)}>{fullscreen?'Salir de pantalla completa':'Pantalla completa'}</button>
+          <button type="button" aria-label="Acercar gráfica" onClick={()=>zoom(.8)}>+</button><button type="button" aria-label="Alejar gráfica" onClick={()=>zoom(1.25)}>−</button>
+          <button type="button" onClick={()=>{fitView();setNote('Vista centrada. Las construcciones se conservan.');}}>Centrar plano</button>
+          <button type="button" onClick={()=>{try{const image=canvas.current?.toDataURL('image/png');if(!image)return;const anchor=document.createElement('a');anchor.href=image;anchor.download='RBC-grafica.png';anchor.click();setNote('Gráfica exportada como PNG.');}catch{setNote('La imagen contiene recursos que no permiten exportar.');}}}>Exportar PNG</button>
         </div>
         <p className="tool-note">{toolName}. {note}</p>
         {needsExtra && <label className="extra">Valor<input value={extra} onChange={(e) => setExtra(e.target.value)} /></label>}
@@ -1169,8 +1214,10 @@ function GraphStudio({ deg }: { deg: boolean }) {
         <ul className="exprs">
           {curves.map((cv) => (
             <li key={cv.id}>
+              <input type="checkbox" aria-label={`Mostrar ${cv.expr}`} checked={cv.on} onChange={()=>setCurves(list=>list.map(c=>c.id===cv.id?{...c,on:!c.on}:c))} />
               <button type="button" className="expr-main" onClick={() => centerOn(cv.expr)}><i style={{ background: cv.color }} /><span>f(x) = {cv.expr}</span></button>
-              <button type="button" onClick={() => setCurves((list) => list.filter((c) => c.id !== cv.id))}>✕</button>
+              <button type="button" aria-label={`Editar función ${cv.expr}`} title="Editar función" onClick={()=>{setEditingCurve(cv.id);setDraft(cv.expr);}}>✎</button>
+              <button type="button" aria-label={`Eliminar función ${cv.expr}`} onClick={() => setCurves((list) => list.filter((c) => c.id !== cv.id))}>✕</button>
             </li>
           ))}
           {points.filter((p) => !p.hidden).map((p) => (
@@ -1188,7 +1235,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
             </li>
           ))}
         </ul>
-        <div className="stage">
+        <div className={`stage graph-bg-${bg}`}>
           <canvas ref={canvas} width={1600} height={1000} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
             onWheel={(e) => { e.preventDefault(); const fine = e.ctrlKey || e.altKey || e.metaKey; zoom(e.deltaY > 0 ? (fine ? 1.06 : 1.12) : (fine ? 0.94 : 0.88), e.clientX, e.clientY); }}
           />
@@ -1196,12 +1243,12 @@ function GraphStudio({ deg }: { deg: boolean }) {
             <label>a = {param.toFixed(2)}
               <input type="range" min="-6" max="6" step="0.01" value={param} onChange={(e) => setParam(Number(e.target.value))} />
             </label>
-            <button type="button" onClick={() => setBox({ x0: -8, x1: 8, y0: -5, y1: 5 })}>Reset</button>
+            <button type="button" onClick={() => fitView()}>Centrar</button>
           </div>
         </div>
       </div>
       <div className="entry">
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addCurve()} placeholder="Entrada…" />
+        <span className="entry-prefix">y =</span><input aria-label="Función para graficar" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addCurve()} placeholder="x^2, sin(x), a*x + 1…" /><button type="button" className="go" onClick={addCurve}>{editingCurve?'Actualizar':'Añadir'}</button>{editingCurve&&<button type="button" className="chip" onClick={()=>{setEditingCurve(null);setDraft('');}}>Cancelar</button>}
         {expMode && <sup>□</sup>}
         {(tool === 'poly' || tool === 'polyline' || tool === 'rigid') && pending.length >= 3 && <button type="button" className="go" onClick={() => finish(tool, pending)}>Cerrar</button>}
       </div>
@@ -1221,6 +1268,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
           {kb === 'sym' && <div className="kb-fn">{sym.map((k) => <button key={k} type="button" onClick={() => pushKey(k)}>{k}</button>)}<button type="button" className="op" onClick={() => pushKey('⌫')}>⌫</button></div>}
         </footer>
       )}
+      {templates && <div className="modal-back" onClick={()=>setTemplates(false)}><div className="modal template-gallery" role="dialog" aria-modal="true" aria-label="Plantillas matemáticas" onClick={e=>e.stopPropagation()}><div className="template-heading"><h3>Plantillas matemáticas</h3><button className="chip" onClick={()=>setTemplates(false)}>Cerrar</button></div><p>Importa las funciones y relaciones sin borrar tus construcciones.</p><div className="template-grid">{presets.map(preset=><button type="button" key={preset.name} onClick={()=>importPreset(preset)}><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M0 50H100M50 0V100" stroke="#ffffff20"/><path d={preset.path} fill="none" stroke="currentColor" strokeWidth="2"/></svg><strong>{preset.name}</strong><code>{preset.formula}</code><small>{preset.note}</small><span>Importar relaciones →</span></button>)}</div></div></div>}
       {askExp && <ExpModal base={draft || 'x'} onClose={() => setAskExp(false)} onOk={(exp) => { setDraft((s) => (s || 'x') + toSup(exp)); setAskExp(false); setNote(`Exponente ${exp} colocado sobre la entrada.`); }} />}
     </section>
   );
@@ -1333,6 +1381,12 @@ function ExpModal({ base, onClose, onOk }: { base: string; onClose: () => void; 
 function sheet(title: string, blocks: [string, string][]): string {
   return [`§ ${title}`, ...blocks.flatMap(([head, body]) => [`§ ${head}`, body])].join('\n');
 }
+function ResultActions({text}:{text:string}) {
+  const [status,setStatus]=useState('');
+  const plain=text.replace(/^§/,'').replace(/§/g,'\n');
+  return <div className="ma-result-actions"><button type="button" className="ma-secondary" onClick={()=>copyValue(plain,setStatus)}>Copiar desarrollo</button><button type="button" className="ma-secondary" onClick={()=>downloadData('RBC-desarrollo.txt',plain)}>Descargar desarrollo</button>{status&&<span role="status">{status}</span>}</div>;
+}
+
 function ResultCard({ text }: { text: string }) {
   const chunks = text.split(/\n(?=§ )/);
   const parts = chunks.map((block) => {
@@ -1340,9 +1394,10 @@ function ResultCard({ text }: { text: string }) {
     const marked = lines[0].startsWith('§ ');
     return { head: marked ? lines[0].slice(2).trim() : 'Detalle', body: (marked ? lines.slice(1) : lines).join('\n').trim() };
   }).filter((p) => p.body);
-  if (!text.includes('§ ')) return <pre className="out">{text}</pre>;
+  if (!text.includes('§ ')) return <><ResultActions text={text} /><pre className="out">{text}</pre></>;
   return (
     <div className="result">
+        <ResultActions text={text} />
       {parts.map((p) => (
         <section key={`${p.head}-${p.body.slice(0, 12)}`} className={`res-block${/resultado|respuesta/i.test(p.head) ? ' answer' : ''}`}>
           <h4>{p.head}</h4>
@@ -1391,11 +1446,12 @@ function saveMatrix(list: Matrix[], name: string, res: number[][]): Matrix[] {
   return [...list, { id: name + Date.now(), name, rows: res.length, cols: res[0].length, cells: res.map((row) => row.map((n) => String(Number(n.toPrecision(8))))) }];
 }
 
+const subscript=(n:number)=>String(n).replace(/\d/g,d=>'₀₁₂₃₄₅₆₇₈₉'[Number(d)]);
 function MatrixStudio() {
   const [rows, setRows] = useState(3);
   const [cols, setCols] = useState(3);
-  const [mats, setMats] = useState<Matrix[]>([]);
-  const [active, setActive] = useState(0);
+  const [mats, setMats] = useWorkspaceState<Matrix[]>('matrices',[]);
+  const [active, setActive] = useWorkspaceState('active-matrix',0);
   const [cell, setCell] = useState<{ r: number; c: number } | null>(null);
   const [value, setValue] = useState('');
   const [out, setOut] = useState('');
@@ -1416,10 +1472,12 @@ function MatrixStudio() {
     setOut('');
     setPick(null);
   };
-  const current = mats[active];
-  const toNum = (m: Matrix) => m.cells.map((row) => row.map(cellNum));
+  const current = mats[active] || mats[0];
+  const currentIndex = current ? mats.indexOf(current) : -1;
+  const toNum = (m:Matrix) => { const values=m.cells.map(row=>row.map(cellNum));if(values.some(row=>row.some(value=>!Number.isFinite(value))))throw new Error('Hay una celda no válida. Usa números, fracciones o potencias finitas.');return values; };
   const save = () => {
     if (!cell || !current) return;
+    if(!Number.isFinite(cellNum(value))){setOut('La celda no contiene un número válido. Revisa la expresión y el denominador.');return;}
     setMats((list) => list.map((m, i) => i !== active ? m : { ...m, cells: m.cells.map((row, r) => row.map((v, c) => (r === cell.r && c === cell.c ? value : v))) }));
     const nextC = cell.c + 1 < current.cols ? cell.c + 1 : 0;
     const nextR = cell.c + 1 < current.cols ? cell.r : Math.min(current.rows - 1, cell.r + 1);
@@ -1428,8 +1486,18 @@ function MatrixStudio() {
   };
   const unary = (op: string) => {
     if (!current) { setOut('Primero crea una matriz.'); return; }
-    const a = toNum(current);
     try {
+      const a = toNum(current);
+      if ((op==='det'||op==='sarrus'||op==='inv')&&current.rows!==current.cols)throw new Error('Esta operación requiere una matriz cuadrada.');
+      if(op==='eigen'){
+        if(current.rows!==2||current.cols!==2)throw new Error('Los valores propios están disponibles para matrices 2 × 2.');
+        const tr=a[0][0]+a[1][1],d=det(a),disc=tr*tr-4*d;
+        const values=disc>=0?`λ₁ = ${(tr+Math.sqrt(disc))/2}\nλ₂ = ${(tr-Math.sqrt(disc))/2}`:`λ₁ = ${tr/2} + ${Math.sqrt(-disc)/2}i\nλ₂ = ${tr/2} − ${Math.sqrt(-disc)/2}i`;
+        setOut(sheet('Valores propios (2 × 2)',[['Definición','Son las raíces de det(A − λI) = 0.'],['Polinomio característico',`λ² − (${tr})λ + (${d}) = 0`],['Discriminante',`tr(A)² − 4 det(A) = ${disc}`],['Resultado',values]]));
+      }
+      if(op==='norm'){setOut(sheet('Normas matriciales',[['Norma de Frobenius','Raíz cuadrada de la suma de los cuadrados de todas las entradas.'],['Resultado',`‖A‖F = ${Math.hypot(...a.flat())}\n‖A‖₁ (máxima suma absoluta por columna) = ${Math.max(...transpose(a).map(row=>row.reduce((sum,v)=>sum+Math.abs(v),0)))}\n‖A‖∞ (máxima suma absoluta por fila) = ${Math.max(...a.map(row=>row.reduce((sum,v)=>sum+Math.abs(v),0)))}`]]));}
+      if(op==='rank'){const reduced=rrefSteps(a);const rank=reduced.m.filter(row=>row.some(v=>Math.abs(v)>1e-9)).length;setOut(sheet('Rango y nulidad',[['Datos',fmtM(a)],['Operaciones elementales',reduced.steps.join('\n\n')],['Resultado',`Rango = ${rank}\nNulidad = ${current.cols-rank}\nDimensión del dominio = ${current.cols}`]]));}
+      if(op==='trace'){if(current.rows!==current.cols)throw new Error('La traza requiere una matriz cuadrada.');setOut(sheet('Traza',[['Desarrollo',a.map((row,i)=>String(row[i])).join(' + ')],['Resultado',String(a.reduce((sum,row,i)=>sum+row[i],0))]]));}
       if (op === 'det' || op === 'sarrus') setOut(explainDet(current.name, a));
       if (op === 'yes') {
         const square = a.length === a[0].length;
@@ -1474,9 +1542,9 @@ function MatrixStudio() {
   };
   const withOther = (other: Matrix) => {
     if (!current || !pick || pick === 'scale') return;
-    const a = toNum(current);
-    const b = toNum(other);
     try {
+      const a = toNum(current);
+      const b = toNum(other);
       if (pick === 'add' || pick === 'sub') {
         if (a.length !== b.length || a[0].length !== b[0].length) throw new Error('Para sumar o restar, las dos matrices deben medir lo mismo.');
         const res = pick === 'add' ? addM(a, b) : subM(a, b);
@@ -1512,7 +1580,7 @@ function MatrixStudio() {
     if (!current) return;
     const k = cellNum(scalar);
     if (!scalar.trim() || !Number.isFinite(k)) { setOut('Escribe un número, por ejemplo 2, −3 o 1/2.'); return; }
-    const a = toNum(current);
+    let a:number[][];try{a=toNum(current);}catch(problem){setOut(String(problem));return;}
     const res = scaleM(a, k);
     const lines = a.flatMap((row, i) => row.map((v, j) => `(${i + 1}, ${j + 1}): ${k} · ${v} = ${Number(res[i][j].toPrecision(6))}`));
     setOut(sheet(`${k} · ${current.name}`, [
@@ -1543,9 +1611,10 @@ function MatrixStudio() {
   const solveMatrixSystem = () => {
     if (!current) return;
     try {
+      if(rhs.some(value=>!value.trim()))throw new Error('Completa el resultado de todas las filas; escribe 0 cuando corresponda.');
       const a = toNum(current);
       if (!a.length || !a[0]?.length) throw new Error('La matriz está vacía.');
-      const vars = a[0].map((_, i) => 'xyzwvu'[i] || `x${i + 1}`);
+      const vars = a[0].map((_, i) => 'xyzuvw'[i] || `x${i + 1}`);
       const eqs = a.map((row, i) => {
         const bits = row.map((v, j) => `${j === 0 ? '' : ` ${rowOps[i]?.[j - 1] || '+'} `}${v}${vars[j]}`);
         return `${bits.join('')} = ${rhs[i] || '0'}`;
@@ -1554,22 +1623,24 @@ function MatrixStudio() {
         ...row.map((v, j) => (j > 0 && rowOps[i]?.[j - 1] === '−' ? -v : v)),
         cellNum(rhs[i] || '0'),
       ]);
+      if(aug.some(row=>row.some(value=>!Number.isFinite(value))))throw new Error('Completa todos los coeficientes con números finitos.');
       const traced = rrefSteps(aug);
-      const square = a.length === a[0].length;
-      const unique = square && traced.m.every((row, i) => Math.abs((row[i] ?? 0) - 1) < 1e-6);
-      const sol = traced.m.map((row) => row[row.length - 1]);
-      const check = unique
-        ? eqs.map((_, i) => {
-          const left = a[i].reduce((s, v, j) => s + (j > 0 && rowOps[i]?.[j - 1] === '−' ? -v : v) * sol[j], 0);
-          return `${eqs[i]}\n   lado izquierdo = ${left.toFixed(6)}`;
-        }).join('\n')
-        : 'Si hay menos ecuaciones independientes que incógnitas, faltan datos. Si el pivote se queda en 0, las filas se pisan.';
+      const n=current.cols,eps=1e-9;
+      const inconsistent=traced.m.some(row=>row.slice(0,n).every(v=>Math.abs(v)<eps)&&Math.abs(row[n])>=eps);
+      const pivots=traced.m.map(row=>row.slice(0,n).findIndex(v=>Math.abs(v)>=eps)).filter(i=>i>=0);
+      const free=Array.from({length:n},(_,i)=>i).filter(i=>!pivots.includes(i));
+      const unique=!inconsistent&&pivots.length===n;
+      const sol=Array(n).fill(0);traced.m.forEach(row=>{const pivot=row.slice(0,n).findIndex(v=>Math.abs(v)>=eps);if(pivot>=0)sol[pivot]=row[n];});
+      const format=(v:number)=>String(Number(v.toPrecision(10)));
+      const parametric=traced.m.filter(row=>row.slice(0,n).some(v=>Math.abs(v)>=eps)).map(row=>{const pivot=row.slice(0,n).findIndex(v=>Math.abs(v)>=eps);return `${vars[pivot]} = ${format(row[n])}`+free.filter(j=>Math.abs(row[j])>=eps).map(j=>` ${row[j]>0?'−':'+'} ${format(Math.abs(row[j]))}·${vars[j]}`).join('');}).join('\n');
+      const solution=inconsistent?'Sistema incompatible: aparece una fila 0 = b con b distinto de cero. No existe solución.':unique?vars.map((v,i)=>`${v} = ${format(sol[i])}`).join('\n'):`Infinitas soluciones. Variables libres: ${free.map(i=>vars[i]).join(', ')}.\n${parametric}`;
+      const check=unique?a.map((row,i)=>`Fila ${i+1}: ${format(row.reduce((sum,v,j)=>sum+v*sol[j],0))} = ${rhs[i]}`).join('\n'):inconsistent?'Una igualdad contradictoria impide satisfacer simultáneamente todas las ecuaciones.':'Asigna un valor real a cada variable libre para obtener una solución particular.';
       setOut(sheet(`Gauss-Jordan con ${current.name}`, [
         ['Qué es', 'Cada fila de la matriz se convierte en una ecuación. La celda es el coeficiente y la letra es la incógnita. El botón entre celdas pone el signo. El número después del igual es el resultado de esa fila.'],
         ['Ecuaciones', eqs.join('\n')],
         ['Matriz aumentada', `Los coeficientes van a la izquierda y el resultado a la derecha.\n${fmtM(aug)}`],
         ['Cómo se hizo', traced.steps.join('\n\n')],
-        ['Resultado', unique ? vars.map((v, i) => `${v} = ${sol[i].toFixed(6)}`).join('\n') : `No hay una solución única.\n${fmtM(traced.m)}`],
+        ['Resultado', solution],
         ['Comprobación', check],
       ]));
       setSysOpen(false);
@@ -1578,8 +1649,12 @@ function MatrixStudio() {
   const opName = pick === 'add' ? 'Sumar' : pick === 'sub' ? 'Restar' : pick === 'mul' ? 'Multiplicar' : 'Por un número';
   return (
     <section className="studio">
-      <div className="dim-card">
-        <h2>Nueva matriz</h2>
+      <details className="dim-card matrix-create" open={!current}>
+        <summary>Nueva matriz <span>Dimensiones, identidad y exportación</span></summary>
+        <p className="ma-lab-hint">Crea una matriz vacía o parte de una identidad. Cada celda admite decimales y fracciones como 1/3.</p>
+        <div className="ops"><button type="button" onClick={()=>{const name=`I${rows}`;setMats(list=>[...list,{id:crypto.randomUUID(),name,rows,cols:rows,cells:Array.from({length:rows},(_,r)=>Array.from({length:rows},(_,c)=>r===c?'1':'0'))}]);setActive(mats.length);setOut('Matriz identidad creada: unos en la diagonal principal y ceros en el resto.');}}>Crear identidad</button>
+        {mats.length>0&&<button type="button" onClick={()=>downloadData('RBC-matrices.json',JSON.stringify(mats,null,2),'application/json')}>Exportar matrices</button>}</div>
+
         <div className="dim">
           <span>Filas</span>
           <button type="button" onClick={() => setRows((n) => Math.max(1, n - 1))}>−</button>
@@ -1591,35 +1666,29 @@ function MatrixStudio() {
           <button type="button" onClick={() => setCols((n) => Math.min(6, n + 1))}>+</button>
         </div>
         <button type="button" className="create" onClick={create}>Crear matriz</button>
-      </div>
-      {!current && <p className="note">Elige el tamaño y pulsa Crear matriz. Luego toca cada burbuja para escribir el número.</p>}
+      </details>
+      {!current && <p className="note">Elige el tamaño y pulsa Crear matriz. Después escribe directamente en la cuadrícula; las celdas vacías valen cero.</p>}
       {current && (
         <>
           <div className="mat-tabs">
             {mats.map((m, i) => <button key={m.id} type="button" className={i === active ? 'on' : ''} onClick={() => { setActive(i); setCell(null); setPick(null); }}>{m.name} · {m.rows}×{m.cols}</button>)}
           </div>
-          <div className="bubbles" style={{ gridTemplateColumns: `repeat(${current.cols}, minmax(76px, 1fr))` }}>
-            {current.cells.flatMap((row, r) => row.map((v, c) => (
-              <button key={`${current.id}-${r}-${c}`} type="button" className={`bubble${cell?.r === r && cell?.c === c ? ' on' : ''}`}
-                onClick={() => { setCell({ r, c }); setValue(v); }}>{v === '' ? '·' : v}</button>
-            )))}
+          <div className="matrix-board">
+            <div className="matrix-caption"><strong>{current.name} <small>{current.rows} × {current.cols}</small></strong><span>Escribe en las celdas · Tab avanza · pega filas desde una hoja de cálculo</span></div>
+            <div className="matrix-scroll"><div className="matrix-grid" style={{gridTemplateColumns:`repeat(${current.cols}, minmax(64px,100px))`}}>
+              {current.cells.flatMap((row,r)=>row.map((v,c)=><label key={`${current.id}-${r}-${c}`}><span>a{subscript(r+1)}{subscript(c+1)}</span><input aria-label={`Matriz ${current.name}, fila ${r+1}, columna ${c+1}`} value={v} placeholder="0" aria-invalid={!Number.isFinite(cellNum(v))} onKeyDown={event=>{if(event.key!=='Enter')return;event.preventDefault();const inputs=event.currentTarget.closest('.matrix-grid')?.querySelectorAll('input');inputs?.[(r*current.cols+c+1)%(current.rows*current.cols)]?.focus();}} onChange={event=>setMats(list=>list.map((m,i)=>i!==currentIndex?m:{...m,cells:m.cells.map((line,ri)=>line.map((old,ci)=>ri===r&&ci===c?event.target.value:old))}))} onPaste={event=>{const source=event.clipboardData.getData('text');if(!/[\t\n]/.test(source))return;event.preventDefault();const lines=source.trim().split(/\r?\n/).map(line=>line.split('\t'));if(lines.some(line=>line.some(value=>!Number.isFinite(cellNum(value))))){setOut('No se pegó: hay valores no numéricos.');return;}if(r+lines.length>current.rows||lines.some(line=>c+line.length>current.cols)){setOut('No se pegó: los datos exceden las dimensiones de esta matriz.');return;}setMats(list=>list.map((m,i)=>i!==currentIndex?m:{...m,cells:m.cells.map((line,ri)=>line.map((old,ci)=>lines[ri-r]?.[ci-c]??old))}));}} /></label>))}
+            </div></div>
+            <div className="ops"><button onClick={()=>{setMats(list=>[...list,{...current,id:crypto.randomUUID(),name:current.name+' copia',cells:current.cells.map(row=>[...row])}]);setActive(mats.length);}}>Duplicar matriz</button><button onClick={()=>{if(!confirm(`¿Eliminar la matriz ${current.name}?`))return;setMats(list=>list.filter(m=>m.id!==current.id));setActive(0);setOut('');}}>Eliminar matriz</button></div>
           </div>
-          {cell && (
-            <div className="cell-edit">
-              <p>Celda {cell.r + 1}, {cell.c + 1}. Acepta negativos, decimales, 1/2 y 2^3.</p>
-              <input value={value} autoFocus onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} placeholder="Escribe el número" />
-              <button type="button" className="create" onClick={save}>Guardar celda</button>
-            </div>
-          )}
           <div className="ops">
-            {[['det', 'Determinante'], ['inv', 'Inversa'], ['tr', 'Transpuesta'], ['yes', '¿Invertible?'], ['sarrus', 'Sarrus'], ['gauss', 'Gauss-Jordan']].map(([id, label]) => (
+            {[['det', 'Determinante'], ['inv', 'Inversa'], ['tr', 'Transpuesta'], ['yes', '¿Invertible?'], ['rank','Rango y nulidad'], ['trace','Traza'], ['norm','Normas'], ['eigen','Valores propios 2 × 2'], ['gauss', 'Forma reducida']].map(([id, label]) => (
               <button key={id} type="button" onClick={() => { setPick(null); unary(id); }}>{label}</button>
             ))}
             <button type="button" onClick={() => setPick('add')}>Sumar</button>
             <button type="button" onClick={() => setPick('sub')}>Restar</button>
             <button type="button" onClick={() => setPick('mul')}>Multiplicar</button>
             <button type="button" onClick={() => setPick('scale')}>Por un número</button>
-            <button type="button" onClick={openSystem}>Sistema Gauss-Jordan</button>
+            <button type="button" onClick={openSystem}>Gauss-Jordan · Resolver Ax = b</button>
           </div>
           {pick && pick !== 'scale' && (
             <div className="picker">
@@ -1644,24 +1713,9 @@ function MatrixStudio() {
             <div className="modal-back" onClick={() => setSysOpen(false)}>
               <div className="modal sys-modal" onClick={(e) => e.stopPropagation()}>
                 <h3>Sistema con {current.name}</h3>
-                <p>Toca el signo entre cada valor. Después del igual escribe el resultado de esa fila. Gauss-Jordan despeja x, y, z…</p>
-                {current.cells.map((row, r) => (
-                  <div key={`${current.id}-eq-${r}`} className="sys-row">
-                    {row.map((v, c) => (
-                      <span key={`${r}-${c}`} className="sys-bit">
-                        {c > 0 && (
-                          <button type="button" className="op" onClick={() => setRowOps((ops) => ops.map((line, i) => i !== r ? line : line.map((op, j) => j === c - 1 ? (op === '+' ? '−' : '+') : op)))}>
-                            {rowOps[r]?.[c - 1] || '+'}
-                          </button>
-                        )}
-                        <b>{v === '' ? '0' : v}</b>
-                        <i>{'xyzwvu'[c] || `x${c + 1}`}</i>
-                      </span>
-                    ))}
-                    <em>=</em>
-                    <input className={rhsFocus === r ? 'focus' : ''} value={rhs[r] || ''} onFocus={() => setRhsFocus(r)} onChange={(e) => setRhs((list) => list.map((v, i) => i === r ? e.target.value : v))} placeholder="resultado" />
-                  </div>
-                ))}
+                <p>Completa las igualdades de Ax = b. Acepta sistemas cuadrados, sobredeterminados y subdeterminados.</p>
+                <div className="augmented-scroll"><table className="augmented-table"><thead><tr>{Array.from({length:current.cols},(_,c)=><th key={c}>{'xyzuvw'[c]||`x${c+1}`}</th>)}<th className="rhs-column">= b</th></tr></thead><tbody>{current.cells.map((row,r)=><tr key={r}>{row.map((v,c)=><td key={c}>{v||'0'}</td>)}<td className="rhs-column"><input aria-label={`Igualdad de la fila ${r+1}`} value={rhs[r]||''} onFocus={()=>setRhsFocus(r)} onChange={e=>setRhs(list=>list.map((v,i)=>i===r?e.target.value:v))} placeholder="Resultado"/></td></tr>)}</tbody></table></div>
+                <p>Cada fila es una ecuación: las columnas son los coeficientes de x, y, z… La última columna contiene el resultado de esa ecuación. Conservamos los signos escritos en la matriz.</p>
                 <div className="mini-pad">
                   {['7', '8', '9', '4', '5', '6', '1', '2', '3', '−', '0', '.', '⌫', 'C'].map((k) => (
                     <button key={k} type="button" className={'−⌫C.'.includes(k) ? 'op' : 'num'} onClick={() => tapRhs(k)}>{k}</button>
@@ -1683,7 +1737,7 @@ function MatrixStudio() {
 
 function SystemSolver() {
   const [mode, setMode] = useState<'sistema' | 'bhaskara' | 'lineal' | 'completar' | 'cramer'>('sistema');
-  const [eqs, setEqs] = useState(['2x + 4y + 3z = 200', 'x + 3y + 2z = 120', '3x + 4y + 2z = 130']);
+  const [eqs, setEqs] = useWorkspaceState('equations',['2x + 4y + 3z = 200', 'x + 3y + 2z = 120', '3x + 4y + 2z = 130']);
   const [focus, setFocus] = useState(0);
   const [abc, setAbc] = useState({ a: '1', b: '-3', c: '2' });
   const [lin, setLin] = useState({ a: '2', b: '5', c: '11' });
@@ -1718,6 +1772,7 @@ function SystemSolver() {
         return [...coeffs, Number(right.trim())];
       });
       const sol = solveAug(aug);
+      if(aug.some(row=>row.some(value=>!Number.isFinite(value))))throw new Error('Completa todos los coeficientes con números finitos.');
       const traced = rrefSteps(aug);
       setOut(sheet('Sistema cuadrado', [
         ['Qué es', 'Un sistema cuadrado tiene tantas ecuaciones como incógnitas. Si las ecuaciones son independientes, hay una sola solución.'],
@@ -2038,14 +2093,17 @@ const FUNCS: LabItem[] = [
   { name: 'Límite numérico', idea: 'Se evalúa la función cada vez más cerca de a, por la izquierda y por la derecha.', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'a', kind: 'num' }], run: ([f, a]) => { const A = Number(a); const steps = ['Se prueba h = 0.1, 0.01 y 0.001.']; try { for (const h of [0.1, 0.01, 0.001]) { const L = evalExpr(f, { x: A - h }, false); const R = evalExpr(f, { x: A + h }, false); steps.push(`h=${h}: f(a−h)=${Number(L.toPrecision(6))} · f(a+h)=${Number(R.toPrecision(6))}`); } return steps.join('\n'); } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
   { name: 'Tabla', idea: 'Varios valores de x muestran cómo crece o decrece la función.', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'desde', kind: 'num' }, { name: 'hasta', kind: 'num' }], run: ([f, a, b]) => { const A = Number(a); const B = Number(b); const lines = ['x    f(x)']; try { for (let i = 0; i <= 6; i++) { const x = A + ((B - A) * i) / 6; const y = evalExpr(f, { x }, false); lines.push(`${Number(x.toPrecision(4))}    ${Number(y.toPrecision(6))}`); } return lines.join('\n'); } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
   { name: 'Segunda derivada', idea: 'f\'\'(x) dice la concavidad. Se aproxima derivando dos veces con diferencias finitas.', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'x', kind: 'num' }], run: ([f, x]) => { const x0 = Number(x); const h = 1e-3; try { const y1 = evalExpr(f, { x: x0 + h }, false); const y0 = evalExpr(f, { x: x0 }, false); const y2 = evalExpr(f, { x: x0 - h }, false); const d2 = (y1 - 2 * y0 + y2) / (h * h); return `f(${x0}+h)=${y1}\nf(${x0})=${y0}\nf(${x0}−h)=${y2}\nf'' ≈ (f(x+h) − 2f(x) + f(x−h)) / h² = ${d2}\n${d2 > 0 ? 'Positiva: cóncava hacia arriba.' : d2 < 0 ? 'Negativa: cóncava hacia abajo.' : 'Casi cero: posible punto de inflexión.'}`; } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
-  { name: 'Ceros', idea: 'Se busca un cambio de signo en [a, b] y se parte el intervalo (bisección).', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'a', kind: 'num' }, { name: 'b', kind: 'num' }], run: ([f, a, b]) => { let A = Number(a); let B = Number(b); try { let fa = evalExpr(f, { x: A }, false); let fb = evalExpr(f, { x: B }, false); if (fa * fb > 0) return 'No hay cambio de signo en ese intervalo. Prueba otros extremos.'; const steps = [`f(${A})=${fa}`, `f(${B})=${fb}`]; for (let k = 0; k < 8; k++) { const m = (A + B) / 2; const fm = evalExpr(f, { x: m }, false); steps.push(`medio ${m}: f=${Number(fm.toPrecision(6))}`); if (fa * fm <= 0) { B = m; fb = fm; } else { A = m; fa = fm; } } return `${steps.join('\n')}\nRaíz aproximada = ${(A + B) / 2}`; } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
+  { name: 'Ceros', idea: 'Se busca un cambio de signo en [a, b] y se parte el intervalo (bisección).', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'a', kind: 'num' }, { name: 'b', kind: 'num' }], run: ([f, a, b]) => { let A = Number(a); let B = Number(b); try { let fa = evalExpr(f, { x: A }, false); let fb = evalExpr(f, { x: B }, false); if (fa * fb > 0) return 'No hay cambio de signo en ese intervalo. Prueba otros extremos.'; const steps = [`f(${A})=${fa}`, `f(${B})=${fb}`]; for (let k = 0; k < 48; k++) { const m = (A + B) / 2; const fm = evalExpr(f, { x: m }, false); if(k<10 || k===47)steps.push(`medio ${m}: f=${Number(fm.toPrecision(6))}`); if(Math.abs(fm)<1e-12){A=m;B=m;break;} if (fa * fm <= 0) { B = m; fb = fm; } else { A = m; fa = fm; } } return `${steps.join('\n')}\nRaíz aproximada = ${(A + B) / 2}`; } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
   { name: 'Secante', idea: 'La pendiente entre dos puntos de la curva es (f(b)−f(a))/(b−a). Es la recta que corta la gráfica en a y en b.', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'a', kind: 'num' }, { name: 'b', kind: 'num' }], run: ([f, a, b]) => { const A = Number(a); const B = Number(b); if (A === B) return 'a y b tienen que ser distintos.'; try { const fa = evalExpr(f, { x: A }, false); const fb = evalExpr(f, { x: B }, false); const m = (fb - fa) / (B - A); return `f(${A}) = ${fa}\nf(${B}) = ${fb}\nPendiente = (${fb} − ${fa}) / (${B} − ${A}) = ${m}\nRecta: y = ${fa} + (${m})(x − ${A})`; } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
-  { name: 'Valor medio', idea: 'El valor medio de f en [a, b] es el área bajo la curva dividida entre el ancho del intervalo.', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'a', kind: 'num' }, { name: 'b', kind: 'num' }], run: ([f, a, b]) => { const A = Number(a); const B = Number(b); const N = 12; const h = (B - A) / N; let s = 0; try { for (let i = 0; i <= N; i++) { const y = evalExpr(f, { x: A + i * h }, false); s += (i === 0 || i === N ? 1 : 2) * y; } const area = (h / 2) * s; return `Área aproximada por trapecios = ${area}\nAncho = ${B - A}\nValor medio = área / ancho = ${area / (B - A)}`; } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
+  { name: 'Valor medio', idea: 'El valor medio de f en [a, b] es el área bajo la curva dividida entre el ancho del intervalo.', fields: [{ name: 'f(x)', kind: 'expr' }, { name: 'a', kind: 'num' }, { name: 'b', kind: 'num' }], run: ([f, a, b]) => { const A = Number(a); const B = Number(b); const N = 256; const h = (B - A) / N; let s = 0; try { for (let i = 0; i <= N; i++) { const y = evalExpr(f, { x: A + i * h }, false); s += (i === 0 || i === N ? 1 : 2) * y; } const area = (h / 2) * s; return `Área aproximada por trapecios = ${area}\nAncho = ${B - A}\nValor medio = área / ancho = ${area / (B - A)}`; } catch (e) { return e instanceof Error ? e.message : 'error'; } } },
 ];
 
 function FormulaLab({ title, items }: { title: string; items: LabItem[] }) {
-  const [pick, setPick] = useState(items[0]);
-  const [vals, setVals] = useState<string[]>(items[0].fields.map(() => ''));
+  const [selection,setSelection]=useWorkspaceState(`lab-${title}-selection`,items[0].name);
+  const pick=items.find(item=>item.name===selection)||items[0];
+  const setPick=(item:LabItem)=>setSelection(item.name);
+  const [search,setSearch]=useState('');
+  const [vals, setVals] = useWorkspaceState<string[]>(`lab-${title}-values`,items[0].fields.map(() => ''));
   const [out, setOut] = useState('');
   const [focus, setFocus] = useState(0);
   const exprKeys = ['7', '8', '9', '+', 'sin(', '4', '5', '6', '−', 'cos(', '1', '2', '3', '*', 'tan(', '0', '.', 'x', '/', 'exp(', '(', ')', '^', 'ln(', 'π', '⌫'];
@@ -2060,20 +2118,23 @@ function FormulaLab({ title, items }: { title: string; items: LabItem[] }) {
   };
   return (
     <section className="studio">
-      <h2>{title}</h2>
-      <div className="cards">
-        {items.map((item) => <button key={item.name} type="button" className={pick.name === item.name ? 'on' : ''} onClick={() => { setPick(item); setVals(item.fields.map(() => '')); setOut(''); setFocus(0); }}>{item.name}</button>)}
-      </div>
-      <p className="idea">{pick.idea}</p>
+      <input className="ma-formula-search" aria-label="Buscar fórmula" type="search" value={search} onChange={event=>{setSearch(event.target.value);const catalog=event.currentTarget.parentElement?.querySelector('details');if(catalog)catalog.open=true;}} placeholder="Buscar una fórmula u operación…" />
+      <details className="formula-catalog"><summary>Fórmulas y métodos <span>{pick.name}</span></summary><div className="cards">
+        {items.filter(item=>`${item.name} ${item.idea}`.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es'))).map((item) => <button key={item.name} type="button" className={pick.name === item.name ? 'on' : ''} onClick={() => { setPick(item); setVals(item.fields.map(() => '')); setOut(''); setFocus(0); }}>{item.name}</button>)}
+      </div></details>
+      <h3 className="formula-title">{pick.name}</h3><p className="idea">{pick.idea}</p>
       <div className="lab">
         {pick.fields.map((field, i) => (
           <label key={field.name}>{field.name}<input value={vals[i] || ''} onFocus={() => setFocus(i)} onChange={(e) => setVals((list) => list.map((v, k) => (k === i ? e.target.value : v)))} /></label>
         ))}
         <button type="button" className="create" onClick={() => {
-          if (pick.fields.some((f, i) => f.kind === 'num' && !Number.isFinite(Number(vals[i])))) { setOut('Completa los datos numéricos.'); return; }
+          if (pick.fields.some((f, i) => f.kind === 'num' && (!(vals[i]||'').trim() || !Number.isFinite(Number(vals[i].replace(',','.')))))) { setOut('Completa los datos numéricos.'); return; }
           if (pick.fields.some((f, i) => f.kind === 'expr' && !(vals[i] || '').trim())) { setOut('Escribe la función.'); return; }
           setOut((() => {
-            const raw = pick.run(vals);
+            let raw:string;
+            try { raw=pick.run(vals.map((value,index)=>pick.fields[index]?.kind==='num'?value.trim().replace(',','.'):value)); }
+            catch(problem) { return problem instanceof Error?problem.message:'No se pudo calcular. Revisa los datos.'; }
+            if(/\b(?:NaN|Infinity)\b/.test(raw))return 'Los datos producen un resultado fuera del dominio. Revisa denominadores, longitudes, raíces e intervalos.';
             if (raw.startsWith('§')) return raw;
             const last = raw.split('\n').map((s) => s.trim()).filter(Boolean).slice(-1)[0] || raw;
             return sheet(pick.name, [
@@ -2081,13 +2142,13 @@ function FormulaLab({ title, items }: { title: string; items: LabItem[] }) {
               ['Datos', pick.fields.map((f, i) => `${f.name}: ${vals[i] || '—'}`).join('\n')],
               ['Cómo se hizo', raw],
               ['Resultado', last],
-              ['Para recordar', 'Revisa unidades y signo. Si un dato era un porcentaje, ya está convertido en el desarrollo. Si era un ángulo, el cálculo usó grados.'],
+              ['Para recordar', title==='Funciones'?'Las funciones de cálculo usan radianes. Los métodos numéricos son aproximaciones: revisa el dominio, la continuidad y el intervalo.':title==='Trigonometría'?'Los ángulos de este laboratorio se expresan en grados. Comprueba que los lados son positivos y que los argumentos de seno y coseno inversos estén entre −1 y 1.':'Comprueba las unidades y el signo del resultado. El área usa unidades cuadradas; el volumen, cúbicas. Un porcentaje p equivale a p/100; ningún denominador puede ser cero.'],
             ]);
           })());
         }}>Calcular</button>
       </div>
       {keys.length > 0 && (
-        <div className="eqpad">{keys.map((k) => <button key={k} type="button" className={'−+*/=⌫'.includes(k) ? 'op' : 'num'} onClick={() => write(k)}>{k}</button>)}</div>
+        <details className="formula-keyboard"><summary>Teclado matemático</summary><div className="eqpad">{keys.map((k) => <button key={k} type="button" className={'−+*/=⌫'.includes(k) ? 'op' : 'num'} onClick={() => write(k)}>{k}</button>)}</div></details>
       )}
       {out && <ResultCard text={out} />}
     </section>

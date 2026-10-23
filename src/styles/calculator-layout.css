@@ -1,0 +1,73 @@
+/* Layout only: existing background images and overlays are preserved. */
+:is(.calc-page,.ma,.cv,.bl) button { touch-action: manipulation; }
+:is(.calc-page,.ma,.cv,.bl) button:focus-visible { outline: 2px solid #ffadad; outline-offset: 3px; }
+:is(.calc-page,.ma,.cv,.bl) :is(input,select) { min-width: 0; }
+:is(.calc-page,.ma,.cv,.bl) :is(.drop,.drop-menu) { max-height: min(60dvh,440px); overflow-y:auto; max-width:calc(100vw - 24px); }
+.calc-page .calc-header { flex:0 0 auto; min-height:60px; height:auto; flex-wrap:wrap; padding:8px 12px; }
+.calc-page .calc-title { min-width:0; }
+.calc-page .header-actions { flex-wrap:wrap; }
+.calc-page .calc-header :is(button,.icon-btn) { min-height:44px; }
+.calc-page .calc-body { overflow-y:auto; }
+.calc-page .calc-main { flex-basis:560px; width:min(560px,100%); grid-template-rows:auto 44px 48px minmax(244px,1fr) 48px; gap:8px; min-height:544px; max-height:850px; }
+.calc-page .mem-row .btn { min-height:44px; height:44px; max-height:none; }
+.calc-page .fn-scroll { margin:0; min-height:48px; }
+.calc-page .pad .btn { font-size:clamp(1.1rem,2.5vw,1.5rem); }
+.ma .head { height:auto; min-height:64px; flex:0 0 auto; padding:10px 16px; gap:10px; flex-wrap:wrap; }
+.ma .head h1 { font-size:.9rem; letter-spacing:.1em; min-width:140px; }
+.ma .head :is(.icon,.chip) { min-height:44px; }
+.ma .head .icon { width:44px; flex-shrink:0; }
+.ma .head .chip { font-size:.76rem; }
+.ma .workspace-tabs { position:relative; z-index:2; display:flex; flex-shrink:0; gap:8px; padding:12px max(12px,calc((100% - 1200px)/2)); overflow-x:auto; scrollbar-width:thin; background:rgba(8,8,10,.48); border-bottom:1px solid #ffffff14; }
+.ma .workspace-tabs button { flex-shrink:0; min-height:44px; padding:10px 16px; border-radius:12px; border:1px solid #ffffff20; color:#dddde6; background:rgba(18,18,24,.7); font-weight:600; }
+.ma .workspace-tabs button[aria-pressed=true] { background:linear-gradient(180deg,#af2638,#681623); color:#fff; border-color:#ff7a8b; box-shadow:0 4px 16px #0004; }
+.ma .calc { overflow-y:auto; padding:16px 12px max(16px,env(safe-area-inset-bottom)); }
+.ma .shell { width:min(560px,100%); height:auto; min-height:500px; max-height:800px; gap:10px; }
+.ma .readout { padding:18px; border-radius:20px; }
+.ma .readout strong { overflow-wrap:anywhere; font-variant-numeric:tabular-nums; font-size:clamp(1.9rem,5vw,2.7rem); }
+.ma .mem button,.ma .fn button { height:44px; min-height:44px; }
+.ma .fn { scrollbar-width:thin; padding-bottom:4px; }
+.ma .pad { flex:1 0 250px; grid-template-rows:repeat(5,minmax(44px,1fr)); gap:8px; }
+.ma .pad button { font-size:1.25rem; box-shadow:inset 0 1px #ffffff16,0 3px 8px #0003; }
+.ma .eq { min-height:48px; flex-shrink:0; }
+.ma .studio { width:min(1200px,100%); margin:0 auto; padding:20px 16px max(24px,env(safe-area-inset-bottom)); gap:16px; }
+.ma :is(.dim-card,.picker,.cell-edit,.res-block) { border-color:#ffffff24; border-radius:18px; padding:18px; }
+.ma .cards { grid-template-columns:repeat(auto-fit,minmax(min(155px,100%),1fr)); gap:10px; }
+.ma .cards button { min-height:56px; line-height:1.4; }
+.ma .lab { gap:12px; }
+.ma .lab label { flex:1 1 160px; }
+.ma :is(.result,.out,.res-block pre) { overflow-wrap:anywhere; }
+.ma .bubbles { overflow:auto; padding:4px; }
+.ma .bubble { min-width:44px; }
+.ma .graph { padding-bottom:env(safe-area-inset-bottom); }
+.ma .toolbar button { width:44px; height:44px; }
+.ma .expr-main { min-width:0; min-height:44px; overflow-wrap:anywhere; }
+.ma .entry input { width:0; min-width:0; }
+.ma .entry { flex-wrap:wrap; }
+.ma .hud { top:12px; bottom:auto; left:auto; max-width:calc(100% - 24px); flex-wrap:wrap; }
+.cv .cv-head,.bl .bl-head { z-index:60; flex-wrap:wrap; }
+.cv .cv-main,.bl .bl-main { width:100%; padding-bottom:max(32px,env(safe-area-inset-bottom)); }
+.cv .panel,.bl .panel { min-width:0; }
+.bl .col { min-width:0; }
+.bl .bl-head .menu-wrap { flex:0 0 auto; }
+@media (max-width:600px) {
+ .ma .head { gap:6px; padding:8px 10px; }
+ .ma .head h1 { flex-basis:calc(100% - 56px); }
+ .ma .workspace-tabs { padding:8px 10px; gap:6px; }
+ .ma .workspace-tabs button { padding:8px 12px; font-size:.8rem; }
+ .ma .studio { padding:12px 10px max(20px,env(safe-area-inset-bottom)); }
+ .ma .graph-body { min-height:200px; grid-template-rows:auto minmax(180px,1fr); }
+ .ma .hud input[type=range] { width:100px; }
+ .cv .panel-top { flex-wrap:wrap; }
+ .cv .search { max-width:none; width:100%; }
+ .cv .cv-head h1,.bl .bl-head h1 { font-size:.85rem; letter-spacing:.06em; }
+ .bl .bl-head { gap:8px; padding:10px; }
+ .bl .bl-head .chip { padding:8px; min-height:44px; }
+ .calc-page .calc-title { font-size:.75rem; letter-spacing:.05em; }
+ .calc-page .calc-main { padding-left:8px; padding-right:8px; }
+}
+@media (max-height:600px) { .ma .calc,.calc-page .calc-body { overflow:auto; } .ma .shell { flex-shrink:0; } }
+
+.calc-page .pad { grid-template-rows:repeat(5,minmax(44px,1fr)); }
+.calc-page .pad .btn { min-height:44px; }
+
+.projects-page .menu-btn { min-height:44px; }

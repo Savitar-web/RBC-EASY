@@ -1,3 +1,12 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+export const nativeShortcuts = registerPlugin<{
+  pin(options: { name: string; path: string }): Promise<{ requested: boolean }>;
+  launchRoute(): Promise<{ path: string }>;
+  addListener(event: 'openRoute', listener: (data: { path: string }) => void): Promise<{ remove(): Promise<void> }>;
+}>('RbcShortcuts');
+export const isNativeAndroid = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+
 export type InstallOutcome = 'accepted' | 'dismissed' | 'unavailable' | 'installed';
 
 type BeforeInstall = Event & {
@@ -35,6 +44,7 @@ export function canPromptInstall(): boolean {
 }
 
 export async function promptInstall(): Promise<InstallOutcome> {
+  navigator.storage?.persist?.().catch(() => false);
   if (isStandalone()) return 'installed';
   if (!deferred) return 'unavailable';
   await deferred.prompt();
@@ -60,7 +70,7 @@ export function deviceKind(): DeviceKind {
   if (typeof window === 'undefined') return 'other';
   const w = window as Window & { Capacitor?: unknown; rbcDesktop?: { isElectron?: boolean } };
   if (w.rbcDesktop?.isElectron) return 'electron';
-  if (w.Capacitor) return 'capacitor';
+  if (Capacitor.isNativePlatform()) return 'capacitor';
   const ua = navigator.userAgent;
   if (/Electron/i.test(ua)) return 'electron';
   if (/iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';

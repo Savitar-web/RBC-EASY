@@ -1,0 +1,25 @@
+{
+  "id": "/web/modo-ascendido",
+  "name": "Modo ascendido · RBC EASY",
+  "short_name": "Modo ascendido",
+  "lang": "es",
+  "start_url": "/modo-ascendido?web=1",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#07070c",
+  "theme_color": "#07070c",
+  "icons": [
+    {
+      "src": "/icons/pwa/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwa/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

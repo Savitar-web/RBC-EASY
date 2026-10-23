@@ -1,0 +1,6 @@
+Motor local: meSpeak/eSpeak, de Norbert Landsteiner y colaboradores, GPL.
+Fuentes y datos usados: ./source/ y https://github.com/mikolalysenko/mespeak
+Motor original eSpeak: https://espeak.sourceforge.net/
+Codificador MP3: lamejs, LGPL, https://github.com/zhuker/lamejs (licencia adjunta).
+No se envía texto a servicios externos. Las voces locales son sintéticas.
+Las tres pistas de Ambiente son composiciones instrumentales originales generadas para RBC EASY.

@@ -1,0 +1,65 @@
+/* One viewport and one scrolling element for pages outside the two editors.
+   No arbitrary top margin: only actual system insets protect interactive content. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --page-height: 100vh;
+}
+@supports (height: 100dvh) { :root { --page-height: 100dvh; } }
+html[data-app-viewport="page"],
+html[data-app-viewport="page"] body {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior-y: none;
+}
+html[data-app-viewport="page"] #root {
+  height: var(--page-height);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+}
+html[data-app-viewport="page"] :is(.home-page,.projects-page,.contact-page,.calc-page:not(.is-float),.ma,.cv,.bl) {
+  min-height: var(--page-height);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+html[data-app-viewport="page"] :is(.home-page,.calc-page:not(.is-float),.ma) {
+  height: var(--page-height);
+  max-height: var(--page-height);
+  min-height: 0;
+}
+html[data-app-viewport="page"] :is(.home-page,.projects-page,.calc-page:not(.is-float),.ma,.cv,.bl) { padding-top: var(--safe-top); }
+html[data-app-viewport="page"] .home-page { padding-bottom: var(--safe-bottom); }
+html[data-app-viewport="page"] .home-page .container { padding-top:40px; padding-bottom:40px; }
+html[data-app-viewport="page"] :is(.cv-head,.bl-head) { top: var(--safe-top); }
+html[data-app-viewport="page"] .projects-page { padding-bottom: var(--safe-bottom); }
+html[data-app-viewport="page"] .projects-page .center-content {
+  height: calc(var(--page-height) - var(--safe-top) - var(--safe-bottom));
+}
+@media (min-width:769px) {
+  html[data-app-viewport="page"] .projects-page .menu-btn { top:calc(var(--safe-top) + 18px); }
+}
+@media (max-width:768px) {
+  html[data-app-viewport="page"] .projects-page .menu-btn { top:auto; bottom:calc(var(--safe-bottom) + 28px); }
+}
+html[data-app-viewport="page"] .projects-page .projects-title { top:var(--safe-top); }
+html[data-app-viewport="page"] .projects-page .sidebar {
+  height: var(--page-height);
+  padding-top:calc(var(--safe-top) + 18px);
+  padding-bottom:calc(var(--safe-bottom) + 18px);
+}
+html[data-app-viewport="page"] .contact-page {
+  padding:calc(var(--safe-top) + 20px) calc(var(--safe-right) + 20px) calc(var(--safe-bottom) + 20px) calc(var(--safe-left) + 20px);
+}
+html[data-app-viewport="page"] .contact-page .glass-card {
+  max-height:calc(var(--page-height) - var(--safe-top) - var(--safe-bottom) - 40px);
+}
+/* All fixed dialogs stay inside the visible system-safe area as well. */
+html[data-app-viewport="page"] .projects-page .modal-overlay {
+  padding-top:max(16px,var(--safe-top));
+  padding-bottom:max(16px,var(--safe-bottom));
+}

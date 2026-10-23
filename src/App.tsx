@@ -1,5 +1,6 @@
-import { Component, useEffect, useState, type ReactNode } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import {ReadingNotice} from './components/StudioControls';
+import { Component, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './hooks/useTheme';
 import Home from './pages/Home/Home';
 import Projects from './pages/Projects/Projects';
@@ -11,7 +12,13 @@ import ModoAscendido from './pages/ModoAscendido/ModoAscendido';
 import Conversion from './pages/Conversion/Conversion';
 import Balistica from './pages/Balistica/Balistica';
 import { registerServiceWorker } from './pwa/offline';
-import './pwa/install';
+import { isNativeAndroid, nativeShortcuts, promptInstall, onInstallReady, deviceKind, isStandalone } from './pwa/install';
+import layoutCSS from './styles/calculator-layout.css?inline';
+import viewportCSS from './styles/viewport.css?inline';
+import comfortCSS from './styles/comfort.css?inline';
+import Ambience from './audio/Ambience';
+import ShortcutManager from './components/ShortcutManager';
+import { PageBackground } from './components/BackgroundSettings';
 
 const TITLES: Record<string, string> = {
   '/': 'RBC EASY',
@@ -83,6 +90,22 @@ function DocumentTitle() {
   return null;
 }
 
+function PageViewport() {
+  const { pathname } = useLocation();
+  useLayoutEffect(() => {
+    const editor = /^\/(biblias|writer)\/?$/i.test(pathname);
+    const html = document.documentElement;
+    html.dataset.appViewport = editor ? 'editor' : 'page';
+    if (!editor) {
+      // Safari can retain the scroll offset from the keyboard or a previous route.
+      document.getElementById('root')?.scrollTo(0, 0);
+      window.scrollTo(0, 0);
+    }
+    return () => { delete html.dataset.appViewport; };
+  }, [pathname]);
+  return null;
+}
+
 function OfflineBadge() {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   useEffect(() => {
@@ -120,7 +143,29 @@ function OfflineBadge() {
   );
 }
 
+function PlatformAccess() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [ready, setReady] = useState(false);
+  const [note, setNote] = useState('');
+  useEffect(() => onInstallReady(setReady), []);
+  useEffect(() => {
+    if (!isNativeAndroid()) return;
+    let disposed = false;
+    const listener = nativeShortcuts.addListener('openRoute', ({ path }) => { if (!disposed) navigate(path); });
+    nativeShortcuts.launchRoute().then(({ path }) => { if (path && !disposed) navigate(path); }).catch(console.warn);
+    return () => { disposed = true; listener.then(handle => handle.remove()); };
+  }, [navigate]);
+  useEffect(()=>{const bridge=(window as any).rbcDesktop;if(!bridge?.onNavigate)return;return bridge.onNavigate((path:string)=>{if(Object.hasOwn(TITLES,path))navigate(path);});},[navigate]);
+  const params=new URLSearchParams(location.search);
+  if(!params.has('install'))return null;
+  const title=TITLES[location.pathname]?.split(' · ')[0]||'RBC EASY';
+  return <ShortcutManager initialPage={{name:title,path:location.pathname}} installation={params.get('install')==='web'?'web':'pwa'} onClose={()=>navigate(location.pathname+(params.has('web')?'?web=1':''),{replace:true})}/>;
+
+}
+
 export default function App() {
+  const installing=new URLSearchParams(useLocation().search).has('install');
   useEffect(() => {
     registerServiceWorker();
   }, []);
@@ -128,9 +173,12 @@ export default function App() {
   return (
     <ThemeProvider>
       <ErrorBoundary>
+        <PageViewport /><PageBackground />
         <DocumentTitle />
-        <OfflineBadge />
-        <Routes>
+        <PlatformAccess />
+        <OfflineBadge /><Ambience /><ReadingNotice/>
+        <style>{layoutCSS + viewportCSS + comfortCSS}</style>
+        {installing?<div style={{minHeight:'100dvh',background:'var(--ui-field)'}}/>:<Routes>
           <Route path="/" element={<Home />} />
           <Route path="/proyectos" element={<Projects />} />
           <Route path="/contacto" element={<Contact />} />
@@ -148,7 +196,7 @@ export default function App() {
           <Route path="/conversor" element={<Navigate to="/conversion" replace />} />
           <Route path="/ascendido" element={<Navigate to="/modo-ascendido" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        </Routes>}
       </ErrorBoundary>
     </ThemeProvider>
   );

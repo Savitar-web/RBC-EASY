@@ -1,7 +1,14 @@
+import ReaderControls from '../../audio/ReaderControls';
+import PaperPicker from '../../components/PaperPicker';
+import AudioExport from '../../audio/AudioExport';
+import { readingAudio } from '../../audio/storage';
 // src/pages/BibliasMaker/BibliasMaker.tsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
+import { useProofreading } from '../../hooks/useProofreading';
+import ProofreadingDialog from '../../components/ProofreadingDialog';
+import { usePaperTone } from '../../hooks/usePaperTone';
 import ThemeSwitcher from '../../components/layout/ThemeSwitcher';
 
 /* ===================== TIPOS ===================== */
@@ -44,13 +51,6 @@ interface Comment {
   createdAt: number;
 }
 
-interface SpellError {
-  offset: number;
-  length: number;
-  word: string;
-  message: string;
-  suggestions: string[];
-}
 
 type PrefixPlatform = 'whatsapp' | 'amino' | 'kyodo';
 
@@ -100,7 +100,6 @@ const PROJECTS_STORE = 'items';
 const HOJAS_KEY = 'biblias_hojas_v1';
 const FIGURES_KEY = 'figureStore';
 const ACTIONS_KEY = 'actionStore';
-const DICT_KEY = 'palabrasPermitidas';
 const COMMENTS_KEY = 'paragraphComments_v2';
 const AMINO_LIMIT = 2000;
 const TWEET_LIMIT = 280;
@@ -142,11 +141,12 @@ export default function BibliasMaker() {
   const [actions, setActions] = useState<Action[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [charCount, setCharCount] = useState(0);
-  const [allowedWords, setAllowedWords] = useState<Record<string, string>>({});
 
   const [showOptions, setShowOptions] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewHojaId, setPreviewHojaId] = useState<string | null>(null);
+  const [paperTone,setPaperTone]=usePaperTone();
+  const [showPaper,setShowPaper]=useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const [showMediaPanel, setShowMediaPanel] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -162,13 +162,10 @@ export default function BibliasMaker() {
   const [showHojasMenu, setShowHojasMenu] = useState(false);
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const [showSpellAI, setShowSpellAI] = useState(false);
-  const [showSpellManual, setShowSpellManual] = useState(false);
-  const [spellErrors, setSpellErrors] = useState<SpellError[]>([]);
-  const [spellIdx, setSpellIdx] = useState(0);
-  const [spellLoading, setSpellLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
   const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(null);
+  const review = useProofreading(text, setText, activeHojaId, selection, true);
   const [showSelBar, setShowSelBar] = useState(false);
   const [selBarPos, setSelBarPos] = useState({ x: 0, y: 0 });
   const [showPrefixPlatform, setShowPrefixPlatform] = useState(false);
@@ -186,10 +183,14 @@ export default function BibliasMaker() {
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [selectedVoice, setSelectedVoice] = useState('');
   const [speechRate, setSpeechRate] = useState(1);
+  const readingPosition = useRef(0), readingGeneration = useRef(0);
+  const readingSource = useRef('');
+  const readingSelection = useRef(false);
+  useEffect(()=>{readingAudio('biblias-reader',isSpeaking);return()=>readingAudio('biblias-reader',false);},[isSpeaking]);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [remaining, setRemaining] = useState(0);
-  const [selectionOnly, setSelectionOnly] = useState(false);
+  const [, setSelectionOnly] = useState(false);
 
   const [editingAction, setEditingAction] = useState<{ name: string; content: string; index: number | null }>({
     name: '', content: '', index: null,
@@ -344,6 +345,7 @@ export default function BibliasMaker() {
   };
 
   const stopVoice = useCallback(() => {
+    readingGeneration.current++;
     try { speechSynthesis.cancel(); } catch { /* */ }
     if (progressTimer.current) {
       clearInterval(progressTimer.current);
@@ -359,10 +361,16 @@ export default function BibliasMaker() {
     }
   }, []);
 
-  const startVoice = useCallback((onlySelection = false) => {
-    const source = onlySelection && selection?.text ? selection.text : text;
+  const startVoice = useCallback((onlySelection = false, offset = 0, nextRate = speechRate, nextVoice = selectedVoice) => {
+    const source = offset > 0 && readingSource.current ? readingSource.current : onlySelection && selection?.text ? selection.text : text;
+      readingSource.current=source; readingSelection.current=onlySelection;
+      offset=Math.max(0,Math.min(source.length-1,offset));
+      // Seek to a word boundary so a jump never begins halfway through a word.
+      while(offset>0 && /\S/.test(source[offset-1]))offset--;
+      readingPosition.current=offset;
+      const generation=++readingGeneration.current;
     if (!source.trim()) {
-      alert('No hay texto para leer');
+      window.dispatchEvent(new Event('rbc-empty-reading'));
       return;
     }
     try { speechSynthesis.cancel(); } catch { /* */ }
@@ -371,22 +379,25 @@ export default function BibliasMaker() {
       progressTimer.current = null;
     }
 
-    const utterance = new SpeechSynthesisUtterance(source);
+    let boundarySeen=false;
+    const utterance = new SpeechSynthesisUtterance(source.slice(offset));
     utterance.lang = 'es-ES';
-    utterance.rate = Math.min(2, Math.max(0.5, speechRate));
+    utterance.rate = Math.min(2, Math.max(0.5, nextRate));
     utterance.pitch = 1;
     utterance.volume = 1;
-    const v = voices.find((x) => x.name === selectedVoice);
+    const v = voices.find((x) => x.name === nextVoice);
     if (v) utterance.voice = v.voice;
 
-    const estimate = Math.max(1, (source.length / 14) * (1 / speechRate));
-    setElapsed(0);
-    setRemaining(estimate);
-    setProgress(0);
+    const estimate = Math.max(1, (source.length / 14) * (1 / nextRate));
+    setElapsed(estimate*offset/source.length);
+    setRemaining(estimate*(1-offset/source.length));
+    setProgress(offset/source.length*100);
     speakStart.current = Date.now();
     setSelectionOnly(onlySelection);
 
-    utterance.onend = () => {
+    utterance.onboundary = e => {if(generation===readingGeneration.current){boundarySeen=true;readingPosition.current=offset+e.charIndex;setProgress(readingPosition.current/source.length*100);}};
+      utterance.onend = () => {
+        if(generation!==readingGeneration.current)return;
       setIsSpeaking(false);
       setProgress(100);
       setElapsed(estimate);
@@ -400,11 +411,13 @@ export default function BibliasMaker() {
         try { navigator.mediaSession.playbackState = 'none'; } catch { /* */ }
       }
     };
-    utterance.onerror = () => stopVoice();
+    utterance.onerror = () => {if(generation===readingGeneration.current)stopVoice();};
 
     progressTimer.current = window.setInterval(() => {
-      const el = (Date.now() - speakStart.current) / 1000;
-      setProgress(Math.min(99, (el / estimate) * 100));
+      if(generation!==readingGeneration.current)return;
+      const el = (Date.now() - speakStart.current) / 1000 + estimate*offset/source.length;
+      if(!boundarySeen)readingPosition.current=Math.min(source.length-1,Math.floor(el/estimate*source.length));
+      setProgress(Math.min(99, boundarySeen?readingPosition.current/source.length*100:(el/estimate)*100));
       setElapsed(el);
       setRemaining(Math.max(0, estimate - el));
     }, 200);
@@ -446,8 +459,6 @@ export default function BibliasMaker() {
       if (figs) setFigures(JSON.parse(figs));
       const acts = localStorage.getItem(ACTIONS_KEY);
       if (acts) setActions(JSON.parse(acts));
-      const dict = localStorage.getItem(DICT_KEY);
-      if (dict) setAllowedWords(JSON.parse(dict));
       const com = localStorage.getItem(COMMENTS_KEY);
       if (com) setComments(JSON.parse(com));
     } catch { /* */ }
@@ -506,6 +517,7 @@ export default function BibliasMaker() {
     const loadVoices = () => {
       const list = speechSynthesis
         .getVoices()
+        .sort((a,b)=>Number(b.lang.startsWith('es'))-Number(a.lang.startsWith('es'))||Number(/Microsoft/i.test(b.name))-Number(/Microsoft/i.test(a.name)))
         .filter((v) => v.lang.startsWith('es') || v.lang.startsWith('en') || v.lang.startsWith('pt'))
         .map((v) => ({ name: v.name, lang: v.lang, voice: v }));
       setVoices(list);
@@ -534,8 +546,10 @@ export default function BibliasMaker() {
     }
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
-      if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+      if ((e.ctrlKey || e.metaKey) && !e.isComposing && e.target === textareaRef.current) {
+        if (e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+        if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+      }
       if (e.key === 'Escape') setShowPreview(false);
     };
     window.addEventListener('keydown', onKey);
@@ -555,27 +569,27 @@ export default function BibliasMaker() {
     historyIndex.current = 0;
   };
 
+  const latestDraft = useRef({ text, hojas, activeHojaId, figures, actions, comments });
+  latestDraft.current = { text, hojas, activeHojaId, figures, actions, comments };
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const flush = () => {
+      const { text, hojas, activeHojaId, figures, actions, comments } = latestDraft.current;
       if (activeHojaId) {
-        setHojas((prev) => {
-          const next = prev.map((h) =>
-            h.id === activeHojaId ? { ...h, content: text, lastModified: Date.now() } : h
-          );
-          try { localStorage.setItem(HOJAS_KEY, JSON.stringify(next)); } catch { /* */ }
-          return next;
-        });
+        const next = hojas.map(h => h.id === activeHojaId ? {...h, content:text, lastModified:Date.now()} : h);
+        try { localStorage.setItem(HOJAS_KEY, JSON.stringify(next)); } catch { /* existing IndexedDB backup remains available */ }
         saveToDB(text);
       }
       try {
         localStorage.setItem(FIGURES_KEY, JSON.stringify(figures));
         localStorage.setItem(ACTIONS_KEY, JSON.stringify(actions));
-        localStorage.setItem(DICT_KEY, JSON.stringify(allowedWords));
         localStorage.setItem(COMMENTS_KEY, JSON.stringify(comments));
       } catch { /* */ }
-    }, 500);
-    return () => clearInterval(id);
-  }, [text, activeHojaId, figures, actions, allowedWords, comments]);
+    };
+    const id = window.setTimeout(flush, 500);
+    const hide = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush); document.addEventListener('visibilitychange', hide);
+    return () => { clearTimeout(id); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hide); flush(); };
+  }, [text, activeHojaId, figures, actions, comments]);
 
   useEffect(() => {
     setCharCount(text.length);
@@ -588,6 +602,7 @@ export default function BibliasMaker() {
     setHojas((p) => [...p, n]);
     setActiveHojaId(n.id);
     setText(content);
+    historyRef.current = [content]; historyIndex.current = 0;
     setShowHojasMenu(false);
   };
 
@@ -597,6 +612,7 @@ export default function BibliasMaker() {
     if (h) {
       setActiveHojaId(id);
       setText(h.content);
+      historyRef.current = [h.content]; historyIndex.current = 0;
     }
   };
 
@@ -610,6 +626,7 @@ export default function BibliasMaker() {
     if (activeHojaId === id) {
       setActiveHojaId(rest[0].id);
       setText(rest[0].content);
+      historyRef.current = [rest[0].content]; historyIndex.current = 0;
     }
   };
 
@@ -883,74 +900,6 @@ export default function BibliasMaker() {
     showNotif('Comentario de párrafo guardado');
   };
 
-  /* ===================== ORTOGRAFÍA (reemplazo real + offsets) ===================== */
-  const runSpellManual = async () => {
-    setSpellLoading(true);
-    setShowSpellManual(true);
-    setSpellErrors([]);
-    setSpellIdx(0);
-    try {
-      const res = await fetch('https://api.languagetool.org/v2/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ text, language: 'es' }),
-      });
-      const data = await res.json();
-      const errors: SpellError[] = (data.matches || [])
-        .filter((m: { offset: number; length: number }) => {
-          const w = text.substr(m.offset, m.length).toLowerCase();
-          return !allowedWords[w];
-        })
-        .map((m: { offset: number; length: number; message: string; replacements?: { value: string }[] }) => ({
-          offset: m.offset,
-          length: m.length,
-          word: text.substr(m.offset, m.length),
-          message: m.message,
-          suggestions: (m.replacements || []).slice(0, 5).map((r) => r.value),
-        }));
-      setSpellErrors(errors);
-      if (!errors.length) showNotif('Sin errores detectados');
-    } catch {
-      showNotif('Sin conexión al corrector');
-    }
-    setSpellLoading(false);
-  };
-
-  /** Reemplaza la palabra errónea y recalcula offsets del resto */
-  const applySpellSuggestion = (suggestion: string) => {
-    const err = spellErrors[spellIdx];
-    if (!err) return;
-
-    const before = text.substring(0, err.offset);
-    const after = text.substring(err.offset + err.length);
-    const newText = before + suggestion + after;
-    const delta = suggestion.length - err.length;
-
-    setText(newText);
-
-    // Recalcular offsets de errores posteriores
-    const nextErrors = spellErrors
-      .filter((_, i) => i !== spellIdx)
-      .map((e) => {
-        if (e.offset > err.offset) {
-          return { ...e, offset: e.offset + delta };
-        }
-        return e;
-      });
-
-    setSpellErrors(nextErrors);
-    setSpellIdx((i) => Math.min(i, Math.max(0, nextErrors.length - 1)));
-    playClick();
-  };
-
-  const allowWord = () => {
-    const err = spellErrors[spellIdx];
-    if (!err) return;
-    setAllowedWords((p) => ({ ...p, [err.word.toLowerCase()]: '1' }));
-    setSpellErrors((prev) => prev.filter((_, i) => i !== spellIdx));
-    setSpellIdx((i) => Math.min(i, Math.max(0, spellErrors.length - 2)));
-  };
-
   /* ===================== EXPORT ===================== */
   const doExport = async () => {
     if (!exportFormat) return;
@@ -977,12 +926,7 @@ export default function BibliasMaker() {
         setExportProgress(100);
       }
 
-      if (exportFormat === 'mp3') {
-        setExportProgress(50);
-        showNotif('Reproduciendo. Usa grabación del sistema para guardar audio.');
-        startVoice(false);
-        setExportProgress(100);
-      }
+
     } catch {
       showNotif('Error al exportar');
     }
@@ -1209,6 +1153,7 @@ export default function BibliasMaker() {
         <textarea
           ref={textareaRef}
           className="bm-textarea"
+          data-paper={paperTone}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onSelect={updateSelection}
@@ -1223,6 +1168,8 @@ export default function BibliasMaker() {
           }}
           placeholder="Escribe tu turno aquí... uwu"
           spellCheck
+          lang="es"
+          autoCapitalize="sentences"
         />
       </div>
 
@@ -1253,9 +1200,10 @@ export default function BibliasMaker() {
           <button onClick={() => { setShowSaveToProjects(true); setSaveAfterExport(false); setShowOptions(false); }}>💾 Guardar en Mis Biblias</button>
           <button onClick={() => { navigator.clipboard.writeText(text); showNotif('Copiado'); setShowOptions(false); }}>📋 Copiar Todo</button>
           <button onClick={() => { setAskPrefixes(!askPrefixes); showNotif(askPrefixes ? 'Prefijos OFF' : 'Prefijos ON'); }}>
-            {askPrefixes ? 'Apagar prefijos' : 'Encender prefijos'}
+            {askPrefixes ? '⌨ Apagar prefijos' : '⌨ Encender prefijos'}
           </button>
           <button onClick={() => { setShowSpellAI(true); setShowOptions(false); }}>✨ Limpiar ortografía</button>
+          <button onClick={()=>{setShowPaper(true);setShowOptions(false);}}>🎨 Color de hoja</button>
           <button onClick={() => { setShowTheme(true); setShowOptions(false); }}>🎨 Temas</button>
           <button onClick={() => navigate('/calcular')}>☣ Calculadora</button>
         </div>
@@ -1343,45 +1291,19 @@ export default function BibliasMaker() {
         </div>
       )}
 
-      {showVoiceBar && (
-        <div className="voice-bar">
-          <div className="row">
-            <select value={selectedVoice} onChange={(e) => setSelectedVoice(e.target.value)}>
-              {voices.map((v) => (
-                <option key={v.name} value={v.name}>{v.name.slice(0, 28)}</option>
-              ))}
-            </select>
-            <button className="ctrl" onClick={toggleVoice}>{isSpeaking ? '⏹' : '▶'}</button>
-            <button className="ctrl" onClick={() => { stopVoice(); setShowVoiceBar(false); }}>✕</button>
-          </div>
-          <div className="row">
-            <span style={{ fontSize: 11, color: '#888' }}>Vel</span>
-            <input type="range" min="0.5" max="2" step="0.1" value={speechRate}
-              onChange={(e) => setSpeechRate(parseFloat(e.target.value))} />
-            <span style={{ fontSize: 11, width: 28 }}>{speechRate.toFixed(1)}</span>
-          </div>
-          <div className="progress-row">
-            <span>{formatTime(elapsed)}</span>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${progress}%` }} />
-            </div>
-            <span>{formatTime(remaining)}</span>
-          </div>
-          {selectionOnly && <div style={{ fontSize: 11, color: '#888' }}>Selección</div>}
-        </div>
-      )}
+      {showVoiceBar && <div className="voice-bar"><ReaderControls voices={voices.map(v=>({value:v.name,label:v.name}))} voice={selectedVoice} onVoice={value=>{setSelectedVoice(value); if(isSpeaking)startVoice(readingSelection.current,readingPosition.current,speechRate,value);}} rate={speechRate} onRate={value=>{setSpeechRate(value);if(isSpeaking)startVoice(readingSelection.current,readingPosition.current,value,selectedVoice);}} progress={progress} onSeek={percent=>startVoice(readingSelection.current,Math.round(readingSource.current.length*percent/100))} playing={isSpeaking} onToggle={toggleVoice} onClose={()=>{stopVoice();setShowVoiceBar(false);}} time={formatTime(elapsed)} remaining={formatTime(remaining)}/></div>}
 
       {showExport && (
         <div className="modal-backdrop" onClick={() => !exporting && setShowExport(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <button className="close-x" onClick={() => setShowExport(false)}>×</button>
-            <h3>Exportar Biblia</h3>
+          <div className="modal rbc-export-dialog" onClick={(e) => e.stopPropagation()}>
+            <header className="rbc-export-head"><h3>Exportar Biblia</h3><button className="close-x" aria-label="Cerrar exportación" onClick={() => setShowExport(false)}>×</button></header><p className="rbc-export-intro">{hojas.find(h=>h.id===activeHojaId)?.name||'Biblia'} · {text.length.toLocaleString('es')} caracteres. Elige documento o audio. El contenido de la hoja permanece guardado.</p>
             <div className="export-formats">
-              <button className={exportFormat === 'pdf' ? 'active' : ''} onClick={() => setExportFormat('pdf')}>PDF</button>
-              <button className={exportFormat === 'txt' ? 'active' : ''} onClick={() => setExportFormat('txt')}>TXT</button>
-              <button className={exportFormat === 'mp3' ? 'active' : ''} onClick={() => setExportFormat('mp3')}>MP3</button>
+              <button className={exportFormat === 'pdf' ? 'active' : ''} onClick={() => setExportFormat('pdf')}>PDF<small>Documento para imprimir</small></button>
+              <button className={exportFormat === 'txt' ? 'active' : ''} onClick={() => setExportFormat('txt')}>TXT<small>Texto sin formato</small></button>
+              <button className={exportFormat === 'mp3' ? 'active' : ''} onClick={() => setExportFormat('mp3')}>MP3<small>Estudio de voz y audio</small></button>
             </div>
-            <div className="export-progress">
+            {exportFormat==='mp3'&&<AudioExport text={text} name={hojas.find(h=>h.id===activeHojaId)?.name||'Biblia'}/>}
+            {exportFormat!=='mp3'&&<><div className="export-progress">
               <div className="export-progress-fill" style={{ width: `${exportProgress}%` }} />
             </div>
             <div className="export-actions">
@@ -1390,7 +1312,7 @@ export default function BibliasMaker() {
               </button>
               <button className="cancel" onClick={() => setShowExport(false)}>Cancelar</button>
             </div>
-            <button
+            </>}<button
               className="full"
               style={{ marginTop: 12 }}
               onClick={() => {
@@ -1404,8 +1326,8 @@ export default function BibliasMaker() {
             <div className="export-hint">
               {exportFormat === 'pdf'
                 ? 'PDF: se abre impresión → elige “Guardar como PDF”'
-                : exportFormat
-                  ? `Formato: ${exportFormat.toUpperCase()}`
+                : exportFormat==='mp3'?'MP3 real: voz local y archivo guardado por fragmentos.':exportFormat
+                  ? 'TXT: texto completo en un archivo compatible con cualquier editor.'
                   : 'Selecciona un formato'}
             </div>
           </div>
@@ -1611,65 +1533,17 @@ export default function BibliasMaker() {
               className="full"
               onClick={() => {
                 setShowSpellAI(false);
-                runSpellManual();
+                review.start();
               }}
             >
-              🔍 Manual (LanguageTool)
+              🔍 Revisar aquí (sin conexión)
             </button>
             <button className="full cancel" onClick={() => setShowSpellAI(false)}>Cancelar</button>
           </div>
         </div>
       )}
 
-      {showSpellManual && (
-        <div className="modal-backdrop" onClick={() => setShowSpellManual(false)}>
-          <div className="modal scroll-thin" onClick={(e) => e.stopPropagation()}>
-            <h3>Revisión ortográfica</h3>
-            {spellLoading && <p style={{ textAlign: 'center', color: '#888' }}>Analizando…</p>}
-            {!spellLoading && spellErrors.length === 0 && (
-              <p style={{ textAlign: 'center', color: '#888' }}>Sin errores o sin conexión</p>
-            )}
-            {!spellLoading && spellErrors.length > 0 && (
-              <>
-                <p style={{ fontSize: 12, color: '#aaa' }}>
-                  {spellIdx + 1} / {spellErrors.length}
-                </p>
-                <div className="spell-box">
-                  <div>
-                    Palabra: <span className="word">{spellErrors[spellIdx]?.word}</span>
-                  </div>
-                  <div style={{ fontSize: 12, marginTop: 6 }}>{spellErrors[spellIdx]?.message}</div>
-                  <div className="spell-sugs">
-                    {(spellErrors[spellIdx]?.suggestions || []).map((s) => (
-                      <button key={s} onClick={() => applySpellSuggestion(s)}>{s}</button>
-                    ))}
-                  </div>
-                </div>
-                <button className="full" onClick={allowWord}>Añadir al diccionario</button>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    className="full cancel"
-                    style={{ flex: 1 }}
-                    disabled={spellIdx <= 0}
-                    onClick={() => setSpellIdx((i) => Math.max(0, i - 1))}
-                  >
-                    ←
-                  </button>
-                  <button
-                    className="full cancel"
-                    style={{ flex: 1 }}
-                    disabled={spellIdx >= spellErrors.length - 1}
-                    onClick={() => setSpellIdx((i) => Math.min(spellErrors.length - 1, i + 1))}
-                  >
-                    →
-                  </button>
-                </div>
-              </>
-            )}
-            <button className="full cancel" onClick={() => setShowSpellManual(false)}>Cerrar</button>
-          </div>
-        </div>
-      )}
+      <ProofreadingDialog review={review} />
 
       {/* ========== VISTA PREVIA: cerrar siempre visible, sin choque ========== */}
       {showPreview && (
@@ -1727,10 +1601,12 @@ export default function BibliasMaker() {
         </div>
       )}
 
+      {showPaper&&<PaperPicker onClose={()=>setShowPaper(false)}/>}
+
       {showTheme && (
         <div className="modal-backdrop" onClick={() => setShowTheme(false)}>
           <div style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
-            <ThemeSwitcher onClose={() => setShowTheme(false)} />
+            <ThemeSwitcher onClose={() => setShowTheme(false)} onPaper={()=>{setShowTheme(false);setShowPaper(true);}} />
           </div>
         </div>
       )}

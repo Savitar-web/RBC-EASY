@@ -1,20 +1,13 @@
+import {StudioSelect} from '../../components/StudioControls';
 // src/pages/Projects/Projects.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import {
-  absoluteUrl,
-  canPromptInstall,
-  deviceKind,
-  downloadTextFile,
-  isStandalone,
-  onInstallReady,
-  promptInstall,
-  shortcutFile,
-  type DeviceKind,
-} from '../../pwa/install';
+
+import BackgroundSettings from '../../components/BackgroundSettings';
+import ShortcutManager from '../../components/ShortcutManager';
 import { BACKGROUND_IMAGES } from '../../pwa/offline';
 
 interface Item {
@@ -46,9 +39,8 @@ export default function Projects() {
   const [clipboardText, setClipboardText] = useState('');
   const [clipboardName, setClipboardName] = useState('');
   const [confirmImport, setConfirmImport] = useState(false);
+  const [backgroundsOpen,setBackgroundsOpen]=useState(false);
   const [shortcutsModal, setShortcutsModal] = useState(false);
-  const [installReady, setInstallReady] = useState(false);
-  const [shortcutNote, setShortcutNote] = useState('');
 
   const dragItem = useRef<Item | null>(null);
 
@@ -77,7 +69,7 @@ export default function Projects() {
 
   useEffect(() => {
     loadItems();
-    return onInstallReady(setInstallReady);
+
   }, []);
 
   const saveItem = async (item: Item) => {
@@ -383,120 +375,6 @@ export default function Projects() {
     }
     return path;
   })();
-
-  const shortcuts: { name: string; path: string; detail: string }[] = [
-    { name: 'Inicio', path: '/', detail: 'Pantalla principal' },
-    { name: 'Mis Proyectos', path: '/proyectos', detail: 'Biblias, datos y este panel' },
-    { name: 'Biblias Maker', path: '/biblias', detail: 'Editor de hojas' },
-    { name: 'Modo Escritor', path: '/Writer', detail: 'Escritura' },
-    { name: 'Calculadora', path: '/calcular', detail: 'Científica de pantalla completa' },
-    { name: 'Balística', path: '/balistica', detail: 'Trayectoria, caída y energía' },
-    { name: 'Conversión', path: '/conversion', detail: 'Unidades, una familia cada vez' },
-    { name: 'Modo Ascendido', path: '/modo-ascendido', detail: 'Gráficas, matrices y cálculo' },
-    { name: 'Contacto', path: '/contacto', detail: 'Contacto' },
-  ];
-
-  const kind: DeviceKind = deviceKind();
-  const installed = isStandalone();
-
-  const desktopBridge = () =>
-    (window as Window & {
-      rbcDesktop?: {
-        isElectron?: boolean;
-        createShortcut: (payload: { name: string; url: string }) => Promise<{ ok: boolean; path?: string; error?: string }>;
-        createAllShortcuts: (list: { name: string; url: string }[]) => Promise<{ ok: boolean; paths?: string[]; errors?: string[] }>;
-      };
-    }).rbcDesktop;
-
-  const addToHome = async () => {
-    setShortcutNote('');
-    if (installed) {
-      setShortcutNote('RBC EASY ya está en el inicio o se abrió como aplicación.');
-      return;
-    }
-    const bridge = desktopBridge();
-    if (bridge?.isElectron) {
-      const res = await bridge.createShortcut({ name: 'RBC EASY', url: absoluteUrl('/') });
-      setShortcutNote(res.ok ? `Acceso creado en el escritorio: ${res.path}` : res.error || 'No se pudo crear el acceso.');
-      return;
-    }
-    const outcome = await promptInstall();
-    if (outcome === 'accepted' || outcome === 'installed') {
-      setShortcutNote('Listo. El sistema añadió RBC EASY al inicio o al menú de aplicaciones.');
-      return;
-    }
-    if (outcome === 'dismissed') {
-      setShortcutNote('Instalación cancelada. Puedes volver a pulsar «Añadir a inicio».');
-      return;
-    }
-    if (kind === 'ios') {
-      setShortcutNote('En iPhone o iPad: pulsa Compartir y luego «Añadir a pantalla de inicio». Safari no deja hacerlo con un botón.');
-      return;
-    }
-    if (kind === 'android' || kind === 'capacitor') {
-      setShortcutNote('En el teléfono: menú del navegador (⋮) y «Añadir a la pantalla de inicio». Si la app ya está instalada, mantén pulsado su icono para fijar Calculadora, Balística, Conversión, Ascendido o Biblias.');
-      return;
-    }
-    setShortcutNote('Este navegador no mostró el aviso de instalación. Usa Chrome o Edge, o descarga el acceso de escritorio de cada pantalla.');
-  };
-
-  const createPageShortcut = async (page: { name: string; path: string }) => {
-    const url = absoluteUrl(page.path);
-    const bridge = desktopBridge();
-    if (bridge?.isElectron) {
-      const res = await bridge.createShortcut({ name: `RBC ${page.name}`, url });
-      setShortcutNote(res.ok ? `Escritorio: ${res.path}` : res.error || 'No se pudo crear.');
-      return;
-    }
-    if (kind === 'ios' || kind === 'android' || kind === 'capacitor') {
-      const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-      if (nav.share) {
-        try {
-          await nav.share({ title: `RBC ${page.name}`, text: page.name, url });
-          setShortcutNote('Comparte el enlace y elige «Añadir a pantalla de inicio» si el sistema lo ofrece.');
-          return;
-        } catch {
-          /* el usuario canceló compartir */
-        }
-      }
-      try {
-        await navigator.clipboard.writeText(url);
-        setShortcutNote(`Enlace copiado: ${url}. En el móvil se fija desde el menú del navegador o manteniendo pulsado el icono de la app.`);
-      } catch {
-        setShortcutNote(url);
-      }
-      return;
-    }
-    const file = shortcutFile(`RBC ${page.name}`, url, kind === 'electron' ? 'windows' : kind);
-    downloadTextFile(file.filename, file.mime, file.body);
-    setShortcutNote(`Se descargó ${file.filename}. Muévelo al escritorio o al menú de inicio.`);
-  };
-
-  const createAllShortcuts = async () => {
-    const list = shortcuts.map((page) => ({ name: `RBC ${page.name}`, url: absoluteUrl(page.path) }));
-    const bridge = desktopBridge();
-    if (bridge?.isElectron) {
-      const res = await bridge.createAllShortcuts(list);
-      setShortcutNote(res.ok ? `Se crearon ${res.paths?.length ?? 0} accesos en el escritorio.` : 'Algunos accesos no se pudieron crear.');
-      return;
-    }
-    const zip = new JSZip();
-    const folder = zip.folder('accesos-rbc')!;
-    for (const page of shortcuts) {
-      const file = shortcutFile(`RBC ${page.name}`, absoluteUrl(page.path), kind === 'mac' ? 'mac' : kind === 'linux' ? 'linux' : 'windows');
-      folder.file(file.filename, file.body);
-      if (kind !== 'windows') {
-        const win = shortcutFile(`RBC ${page.name}`, absoluteUrl(page.path), 'windows');
-        folder.file(`windows/${win.filename}`, win.body);
-      }
-      if (kind !== 'linux' && kind !== 'android') {
-        const linux = shortcutFile(`RBC ${page.name}`, absoluteUrl(page.path), 'linux');
-        folder.file(`linux/${linux.filename}`, linux.body);
-      }
-    }
-    saveAs(await zip.generateAsync({ type: 'blob' }), 'RBC_accesos_directos.zip');
-    setShortcutNote('Se descargó un paquete con accesos para el escritorio. Ábrelo y arrastra cada uno al escritorio o al menú de inicio.');
-  };
 
   return (
     <>
@@ -1116,22 +994,14 @@ export default function Projects() {
             <button onClick={() => setConfirmImport(true)}>Importar datos</button>
             <button onClick={downloadAllAsZip}>Descargar biblias</button>
             <button onClick={() => setShortcutsModal(true)}>Accesos</button>
+            <button onClick={()=>setBackgroundsOpen(true)}>Personalizar fondos</button>
+            <button onClick={()=>window.dispatchEvent(new Event('rbc-open-ambience'))}>Ambiente</button>
 
             <div style={{ marginTop: 6 }}>
               <p style={{ margin: '0 0 6px', fontWeight: 600, color: 'var(--accent)', fontSize: 13 }}>
                 🎨 Temas
               </p>
-              <select
-                className="theme-select"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as any)}
-              >
-                {themes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <StudioSelect label="Tema de la aplicación" value={theme} onChange={value=>setTheme(value as typeof theme)} options={themes.map(t=>({value:t.id,label:t.name}))}/>
             </div>
 
             <div className="info-box">
@@ -1256,42 +1126,9 @@ export default function Projects() {
           </div>
         )}
 
-        {shortcutsModal && (
-          <div className="modal-overlay" onClick={() => setShortcutsModal(false)}>
-            <div className="modal shortcuts" onClick={(e) => e.stopPropagation()}>
-              <h3>Accesos directos</h3>
-              <p>
-                {installed
-                  ? 'RBC EASY ya está en tu pantalla de inicio. Desde el icono puedes abrir cada pantalla.'
-                  : 'Añade RBC EASY a la pantalla de inicio del teléfono o crea un acceso en el escritorio. Cada pantalla se puede fijar por separado.'}
-              </p>
-              <button onClick={addToHome}>
-                {installed ? 'Ya está instalada' : installReady || canPromptInstall() ? 'Añadir a la pantalla de inicio' : 'Añadir a inicio o escritorio'}
-              </button>
-              <button onClick={createAllShortcuts}>Descargar accesos del escritorio</button>
-              {shortcuts.map((page) => (
-                <div className="shortcut-row" key={page.path}>
-                  <button
-                    className="open"
-                    onClick={() => {
-                      navigate(page.path);
-                      setShortcutsModal(false);
-                    }}
-                  >
-                    {page.name}
-                  </button>
-                  <button className="pin" onClick={() => createPageShortcut(page)}>
-                    Crear acceso
-                  </button>
-                </div>
-              ))}
-              {shortcutNote && <p className="shortcut-note">{shortcutNote}</p>}
-              <button className="cancel" onClick={() => setShortcutsModal(false)}>
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )}
+        {backgroundsOpen&&<BackgroundSettings onClose={()=>setBackgroundsOpen(false)}/>}
+        {shortcutsModal&&<ShortcutManager onClose={()=>setShortcutsModal(false)}/>}
+
       </div>
     </>
   );

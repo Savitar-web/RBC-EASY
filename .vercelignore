@@ -1,0 +1,9 @@
+node_modules
+android
+electron
+dist
+release
+src.zip
+.env*
+*.log
+.desktop-build-*

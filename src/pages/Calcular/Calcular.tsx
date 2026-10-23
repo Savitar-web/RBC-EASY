@@ -8,6 +8,7 @@ import {
   type CSSProperties, type ReactNode, type KeyboardEvent as RKBD,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Crosshair, ArrowLeftRight, ChartNoAxesCombined } from 'lucide-react';
 
 type FieldDef = {
   key: string;
@@ -2368,7 +2369,7 @@ export default function Calcular() {
 
   const [expression, setExpression] = useState('');
   const [resultDisplay, setResultDisplay] = useState('0');
-  const [guide, setGuide] = useState('Edita con el cursor · Science Mode para fórmulas.');
+  const [guide, setGuide] = useState('· Science Mode para fórmulas.');
   const [shake, setShake] = useState(false);
   const [scienceOpen, setScienceOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
@@ -2678,7 +2679,7 @@ export default function Calcular() {
                 <div className="drop-menu" role="menu">
                   {MODULES.map((m) => (
                     <button key={m.id} type="button" onClick={() => { setModulesOpen(false); navigate(m.path); }}>
-                      <strong>{m.icon} {m.name}</strong>
+                      <strong>{m.id==='balistica'?<Crosshair size={20}/>:m.id==='conversion'?<ArrowLeftRight size={20}/>:<ChartNoAxesCombined size={20}/>} {m.name}</strong>
                       <span>{m.desc}</span>
                     </button>
                   ))}

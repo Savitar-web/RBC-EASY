@@ -1,6 +1,14 @@
+import ReaderControls from '../../audio/ReaderControls';
+import PaperPicker from '../../components/PaperPicker';
+import { readingAudio } from '../../audio/storage';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
+import { useProofreading } from '../../hooks/useProofreading';
+import { usePaperTone } from '../../hooks/usePaperTone';
+import DraggableCounter from '../../components/DraggableCounter';
+import ThemeSwitcher from '../../components/layout/ThemeSwitcher';
+import ProofreadingDialog from '../../components/ProofreadingDialog';
 
 interface Action {
   name: string;
@@ -89,7 +97,7 @@ export default function Writer() {
   const [charCount, setCharCount] = useState(0);
   const [actions, setActions] = useState<Action[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [paperTone, setPaperTone] = useState<PaperTone>('dark');
+  const [paperTone, setPaperTone] = usePaperTone();
 
   const [showOptions, setShowOptions] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -97,6 +105,7 @@ export default function Writer() {
   const [showActionEditor, setShowActionEditor] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showHojas, setShowHojas] = useState(false);
+  const [showTheme,setShowTheme]=useState(false);
   const [showPaper, setShowPaper] = useState(false);
   const [showPrefixPlatform, setShowPrefixPlatform] = useState(false);
   const [showPrefixCommands, setShowPrefixCommands] = useState(false);
@@ -104,6 +113,7 @@ export default function Writer() {
   const [askPrefixes, setAskPrefixes] = useState(false);
 
   const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(null);
+  const review = useProofreading(text, setText, activeHojaId, selection);
   const [showSelBar, setShowSelBar] = useState(false);
   const [selBarPos, setSelBarPos] = useState({ x: 0, y: 0 });
   const [showSelComment, setShowSelComment] = useState(false);
@@ -117,6 +127,10 @@ export default function Writer() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState(0);
   const [speechRate, setSpeechRate] = useState(1);
+  const readingPosition = useRef(0), readingGeneration = useRef(0);
+  const readingSource = useRef('');
+  const readingSelection = useRef(false);
+  useEffect(()=>{readingAudio('writer-reader',isSpeaking);return()=>readingAudio('writer-reader',false);},[isSpeaking]);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [remaining, setRemaining] = useState(0);
@@ -271,12 +285,13 @@ export default function Writer() {
       const com = localStorage.getItem(WRITER_COMMENTS_KEY);
       if (com) setComments(JSON.parse(com));
       const tone = localStorage.getItem('writer_paper_tone') as PaperTone | null;
-      if (tone && PAPER_STYLES[tone]) setPaperTone(tone);
+
     } catch { /* */ }
 
     const loadVoices = () => {
       const list = speechSynthesis
         .getVoices()
+        .sort((a,b)=>Number(b.lang.startsWith('es'))-Number(a.lang.startsWith('es'))||Number(/Microsoft/i.test(b.name))-Number(/Microsoft/i.test(a.name)))
         .filter((v) => v.lang.startsWith('es') || v.lang.startsWith('en'));
       setVoices(list);
     };
@@ -285,8 +300,10 @@ export default function Writer() {
     setTimeout(loadVoices, 400);
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
-      if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+      if ((e.ctrlKey || e.metaKey) && !e.isComposing && e.target === taRef.current) {
+        if (e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+        if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+      }
       if (e.key === 'Escape') {
         setShowPreview(false);
         setShowOptions(false);
@@ -307,8 +324,11 @@ export default function Writer() {
   }, []);
 
   /* ---------- Autosave 500 ms ---------- */
+  const latestDraft = useRef({ text, hojas, activeHojaId, actions, comments, paperTone });
+  latestDraft.current = { text, hojas, activeHojaId, actions, comments, paperTone };
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const flush = () => {
+      const { text, hojas, activeHojaId, actions, comments, paperTone } = latestDraft.current;
       try {
         const synced = hojas.map((h) =>
           h.id === activeHojaId ? { ...h, content: text } : h
@@ -320,8 +340,11 @@ export default function Writer() {
         localStorage.setItem(WRITER_COMMENTS_KEY, JSON.stringify(comments));
         localStorage.setItem('writer_paper_tone', paperTone);
       } catch { /* quota */ }
-    }, 500);
-    return () => clearInterval(id);
+    };
+    const id = window.setTimeout(flush, 500);
+    const hide = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush); document.addEventListener('visibilitychange', hide);
+    return () => { clearTimeout(id); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hide); flush(); };
   }, [text, hojas, activeHojaId, actions, comments, paperTone]);
 
   useEffect(() => {
@@ -373,6 +396,7 @@ export default function Writer() {
 
   /* ---------- Voz ---------- */
   const stopVoice = useCallback(() => {
+    readingGeneration.current++;
     try { speechSynthesis.cancel(); } catch { /* */ }
     if (progressTimer.current) {
       clearInterval(progressTimer.current);
@@ -385,38 +409,49 @@ export default function Writer() {
   }, []);
 
   const startVoice = useCallback(
-    (onlySelection = false) => {
-      const source = onlySelection && selection?.text ? selection.text : text;
+    (onlySelection = false, offset = 0, nextRate = speechRate, nextVoice = selectedVoice) => {
+      const source = offset > 0 && readingSource.current ? readingSource.current : onlySelection && selection?.text ? selection.text : text;
+      readingSource.current=source; readingSelection.current=onlySelection;
+      offset=Math.max(0,Math.min(source.length-1,offset));
+      // Seek to a word boundary so a jump never begins halfway through a word.
+      while(offset>0 && /\S/.test(source[offset-1]))offset--;
+      readingPosition.current=offset;
+      const generation=++readingGeneration.current;
       if (!source.trim()) {
-        alert('No hay texto para leer');
+        window.dispatchEvent(new Event('rbc-empty-reading'));
         return;
       }
       try { speechSynthesis.cancel(); } catch { /* */ }
       if (progressTimer.current) clearInterval(progressTimer.current);
 
-      const utterance = new SpeechSynthesisUtterance(source);
+      let boundarySeen=false;
+    const utterance = new SpeechSynthesisUtterance(source.slice(offset));
       utterance.lang = 'es-ES';
-      utterance.rate = speechRate;
-      if (voices[selectedVoice]) utterance.voice = voices[selectedVoice];
+      utterance.rate = nextRate;
+      if (voices[nextVoice]) utterance.voice = voices[nextVoice];
 
-      const estimate = Math.max(1, (source.length / 14) * (1 / speechRate));
-      setElapsed(0);
-      setRemaining(estimate);
-      setProgress(0);
+      const estimate = Math.max(1, (source.length / 14) * (1 / nextRate));
+      setElapsed(estimate*offset/source.length);
+      setRemaining(estimate*(1-offset/source.length));
+      setProgress(offset/source.length*100);
       speakStart.current = Date.now();
 
+      utterance.onboundary = e => {if(generation===readingGeneration.current){boundarySeen=true;readingPosition.current=offset+e.charIndex;setProgress(readingPosition.current/source.length*100);}};
       utterance.onend = () => {
+        if(generation!==readingGeneration.current)return;
         setIsSpeaking(false);
         setProgress(100);
         setElapsed(estimate);
         setRemaining(0);
         if (progressTimer.current) clearInterval(progressTimer.current);
       };
-      utterance.onerror = () => stopVoice();
+      utterance.onerror = () => {if(generation===readingGeneration.current)stopVoice();};
 
       progressTimer.current = window.setInterval(() => {
-        const el = (Date.now() - speakStart.current) / 1000;
-        setProgress(Math.min(99, (el / estimate) * 100));
+        if(generation!==readingGeneration.current)return;
+      const el = (Date.now() - speakStart.current) / 1000 + estimate*offset/source.length;
+      if(!boundarySeen)readingPosition.current=Math.min(source.length-1,Math.floor(el/estimate*source.length));
+        setProgress(Math.min(99, boundarySeen?readingPosition.current/source.length*100:(el/estimate)*100));
         setElapsed(el);
         setRemaining(Math.max(0, estimate - el));
       }, 200);
@@ -961,7 +996,7 @@ export default function Writer() {
       <div className="w-top">
         <button className="icon" onClick={exitToBiblias} title="Volver a Biblias Maker">↲</button>
         <span className="title">{activeHoja?.name || 'Modo Escritor'}</span>
-        <div className="w-counter">Contador: {charCount}</div>
+        <DraggableCounter count={charCount}/>
         <button className="icon" onClick={toggleVoice} title="Voz">
           {isSpeaking ? '⏹' : '▶'}
         </button>
@@ -971,6 +1006,7 @@ export default function Writer() {
         <textarea
           ref={taRef}
           className="w-textarea"
+          data-paper={paperTone}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onSelect={updateSelection}
@@ -985,6 +1021,8 @@ export default function Writer() {
           }}
           placeholder="Escribe tu turno aquí... uwu"
           spellCheck
+          lang="es"
+          autoCapitalize="sentences"
           style={{
             background: paper.bg,
             color: paper.color,
@@ -1012,9 +1050,11 @@ export default function Writer() {
       {showOptions && (
         <div className="w-menu">
           <button onClick={() => { setShowHojas(true); setShowOptions(false); }}>📄 Hojas</button>
+          <button onClick={()=>{setShowTheme(true);setShowOptions(false);}}>🎨 Temas</button>
           <button onClick={() => { setShowPaper(true); setShowOptions(false); }}>🎨 Color de hoja</button>
           <button onClick={() => { setShowPreview(true); setShowOptions(false); }}>👁 Vista previa</button>
           <button onClick={() => { setShowActions(true); setShowOptions(false); }}>📋 Marcos</button>
+          <button onClick={() => { review.start(); setShowOptions(false); }}>🔍 Revisar ortografía</button>
           <button onClick={() => { setShowComments(true); setShowOptions(false); }}>💬 Comentarios</button>
           <button
             onClick={() => {
@@ -1022,7 +1062,7 @@ export default function Writer() {
               showNotif(askPrefixes ? 'Prefijos OFF' : 'Prefijos ON (Enter)');
             }}
           >
-            {askPrefixes ? 'Apagar prefijos' : 'Encender prefijos'}
+            {askPrefixes ? '⌨ Apagar prefijos' : '⌨ Encender prefijos'}
           </button>
           <button
             onClick={() => {
@@ -1054,36 +1094,9 @@ export default function Writer() {
         </div>
       )}
 
-      {showVoiceBar && (
-        <div className="w-voice">
-          <div className="row">
-            <select value={selectedVoice} onChange={(e) => setSelectedVoice(Number(e.target.value))}>
-              {voices.map((v, i) => (
-                <option key={v.name + i} value={i}>{v.name.slice(0, 26)}</option>
-              ))}
-            </select>
-            <button className="ctrl" onClick={toggleVoice}>{isSpeaking ? '⏹' : '▶'}</button>
-            <button className="ctrl" onClick={() => { stopVoice(); setShowVoiceBar(false); }}>✕</button>
-          </div>
-          <div className="row">
-            <span style={{ fontSize: 11, color: '#888' }}>Vel</span>
-            <input
-              type="range"
-              min="0.5"
-              max="2"
-              step="0.1"
-              value={speechRate}
-              onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
-            />
-            <span style={{ fontSize: 11, width: 28 }}>{speechRate.toFixed(1)}</span>
-          </div>
-          <div className="prog-row">
-            <span>{formatTime(elapsed)}</span>
-            <div className="track"><div className="fill" style={{ width: `${progress}%` }} /></div>
-            <span>{formatTime(remaining)}</span>
-          </div>
-        </div>
-      )}
+      {showVoiceBar && <div className="w-voice"><ReaderControls voices={voices.map((v,i)=>({value:String(i),label:v.name}))} voice={String(selectedVoice)} onVoice={value=>{setSelectedVoice(+value); if(isSpeaking)startVoice(readingSelection.current,readingPosition.current,speechRate,+value);}} rate={speechRate} onRate={value=>{setSpeechRate(value);if(isSpeaking)startVoice(readingSelection.current,readingPosition.current,value,selectedVoice);}} progress={progress} onSeek={percent=>startVoice(readingSelection.current,Math.round(readingSource.current.length*percent/100))} playing={isSpeaking} onToggle={toggleVoice} onClose={()=>{stopVoice();setShowVoiceBar(false);}} time={formatTime(elapsed)} remaining={formatTime(remaining)}/></div>}
+
+      <ProofreadingDialog review={review} writer />
 
       {/* Hojas */}
       {showHojas && (
@@ -1108,36 +1121,9 @@ export default function Writer() {
         </div>
       )}
 
+      {showTheme&&<div className="w-backdrop" onClick={()=>setShowTheme(false)}><div onClick={e=>e.stopPropagation()}><ThemeSwitcher onClose={()=>setShowTheme(false)} onPaper={()=>{setShowTheme(false);setShowPaper(true);}}/></div></div>}
       {/* Color de hoja */}
-      {showPaper && (
-        <div className="w-backdrop" onClick={() => setShowPaper(false)}>
-          <div className="w-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Color de la hoja</h3>
-            <div className="paper-opt">
-              <button
-                className={`p-dark ${paperTone === 'dark' ? 'active' : ''}`}
-                onClick={() => { setPaperTone('dark'); setShowPaper(false); }}
-              >
-                Oscuro
-              </button>
-              <button
-                className={`p-light ${paperTone === 'light' ? 'active' : ''}`}
-                onClick={() => { setPaperTone('light'); setShowPaper(false); }}
-              >
-                Claro
-              </button>
-              <button
-                className={`p-sepia ${paperTone === 'sepia' ? 'active' : ''}`}
-                onClick={() => { setPaperTone('sepia'); setShowPaper(false); }}
-              >
-                Sepia
-              </button>
-            </div>
-            <button className="full cancel" onClick={() => setShowPaper(false)}>Cerrar</button>
-          </div>
-        </div>
-      )}
-
+      {showPaper&&<PaperPicker onClose={()=>setShowPaper(false)}/>}
       {showPrefixPlatform && (
         <div className="w-backdrop" onClick={() => setShowPrefixPlatform(false)}>
           <div className="w-modal" onClick={(e) => e.stopPropagation()}>
