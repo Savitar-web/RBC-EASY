@@ -1,5 +1,7 @@
+import {idleSave,draftMetadata} from '../../lib/idleSave';
+import {RenameSheetDialog,SheetManager} from '../../components/SheetDialogs';
 import {useDecorations} from '../../decorations/useDecorations';
-import {Sparkles,Frame,Type} from 'lucide-react';
+import {Sparkles,RectangleHorizontal,Type,TextQuote,MessageSquare,Play} from 'lucide-react';
 import {roleHtml,roleCSS,localFigures} from '../../lib/roleFormat';
 import ReaderControls from '../../audio/ReaderControls';
 import PaperPicker from '../../components/PaperPicker';
@@ -27,7 +29,7 @@ interface Comment {
   createdAt: number;
 }
 
-interface Hoja {
+interface Hoja { closed?:boolean;
   id: string;
   name: string;
   content: string;
@@ -94,10 +96,12 @@ export default function Writer() {
   const speakStart = useRef(0);
   const longPressTimer = useRef<number | null>(null);
 
+  const [draftReady,setDraftReady]=useState(false);
+  const [renameId,setRenameId]=useState<string|null>(null);
   const [hojas, setHojas] = useState<Hoja[]>([{ id: 'h1', name: 'Hoja 1', content: '' }]);
   const [activeHojaId, setActiveHojaId] = useState('h1');
   const [text, setText] = useState('');
-  const [charCount, setCharCount] = useState(0);
+  const charCount = text.length;
   const [actions, setActions] = useState<Action[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [paperTone, setPaperTone] = usePaperTone();
@@ -168,6 +172,8 @@ export default function Writer() {
   );
 
   const switchHoja = (id: string) => {
+    if(id===activeHojaId){setShowHojas(false);return;}
+    setHojas(p=>p.map(h=>h.id===id?{...h,closed:false}:h));
     commitTextToHojas(text);
     const target = hojas.find((h) => h.id === id);
     if (!target) return;
@@ -191,27 +197,13 @@ export default function Writer() {
     showNotif('Hoja creada');
   };
 
-  const renameHoja = (id: string) => {
-    const h = hojas.find((x) => x.id === id);
-    if (!h) return;
-    const name = prompt('Nombre de la hoja:', h.name);
-    if (!name?.trim()) return;
-    setHojas((p) => p.map((x) => (x.id === id ? { ...x, name: name.trim() } : x)));
-  };
+  const renameHoja = (id:string) => setRenameId(id);
 
-  const closeHoja = (id: string) => {
-    if (hojas.length <= 1) {
-      alert('Debe quedar al menos una hoja');
-      return;
-    }
-    const next = hojas.filter((h) => h.id !== id);
-    setHojas(next);
-    if (activeHojaId === id) {
-      setActiveHojaId(next[0].id);
-      setText(next[0].content);
-      historyRef.current = [next[0].content];
-      historyIndex.current = 0;
-    }
+  const closeHoja = (id:string) => {
+    const available=hojas.filter(h=>!h.closed&&h.id!==id);if(!available.length){showNotif('Mantén al menos una hoja abierta. Las demás quedan en Hojas.');return;}
+    setHojas(p=>p.map(h=>({...h,...(h.id===activeHojaId?{content:text}:{}),...(h.id===id?{closed:true}:{})})));
+    if(activeHojaId===id){const next=available[0];setActiveHojaId(next.id);setText(next.content);historyRef.current=[next.content];historyIndex.current=0;}
+    showNotif('Hoja conservada. Puedes volver a abrirla desde Hojas.');
   };
 
   /** Importar hojas desde BibliasMaker (localStorage compartido) */
@@ -276,6 +268,7 @@ export default function Writer() {
       }
     }
 
+    setDraftReady(true);
     setHojas(initialHojas);
     setActiveHojaId(activeId);
     const startText = initialHojas.find((h) => h.id === activeId)?.content || '';
@@ -327,11 +320,15 @@ export default function Writer() {
   }, []);
 
   /* ---------- Autosave 500 ms ---------- */
-  const latestDraft = useRef({ text, hojas, activeHojaId, actions, comments, paperTone });
-  latestDraft.current = { text, hojas, activeHojaId, actions, comments, paperTone };
+  const metadata=useRef(draftMetadata());
+  const flushDraft=useRef<()=>void>(()=>{});
+  useEffect(()=>()=>flushDraft.current(),[]);
+  const latestDraft = useRef({ draftReady, text, hojas, activeHojaId, actions, comments, paperTone });
+  latestDraft.current = { draftReady, text, hojas, activeHojaId, actions, comments, paperTone };
   useEffect(() => {
     const flush = () => {
-      const { text, hojas, activeHojaId, actions, comments, paperTone } = latestDraft.current;
+      const { draftReady, text, hojas, activeHojaId, actions, comments, paperTone } = latestDraft.current;
+      if(!draftReady)return;
       try {
         const synced = hojas.map((h) =>
           h.id === activeHojaId ? { ...h, content: text } : h
@@ -339,19 +336,19 @@ export default function Writer() {
         localStorage.setItem(WRITER_SAVE_KEY, text);
         localStorage.setItem(WRITER_HOJAS_KEY, JSON.stringify(synced));
         localStorage.setItem(WRITER_ACTIVE_KEY, activeHojaId);
-        localStorage.setItem(ACTIONS_KEY, JSON.stringify(actions));
-        localStorage.setItem(WRITER_COMMENTS_KEY, JSON.stringify(comments));
+        metadata.current(ACTIONS_KEY, actions);
+        metadata.current(WRITER_COMMENTS_KEY, comments);
         localStorage.setItem('writer_paper_tone', paperTone);
       } catch { /* quota */ }
     };
-    const id = window.setTimeout(flush, 500);
+    flushDraft.current=flush;
+    const cancelSave = idleSave(flush);
     const hide = () => { if (document.visibilityState === 'hidden') flush(); };
     window.addEventListener('pagehide', flush); document.addEventListener('visibilitychange', hide);
-    return () => { clearTimeout(id); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hide); flush(); };
-  }, [text, hojas, activeHojaId, actions, comments, paperTone]);
+    return () => { cancelSave(); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hide); };
+  }, [draftReady, text, hojas, activeHojaId, actions, comments, paperTone]);
 
   useEffect(() => {
-    setCharCount(text.length);
     if (isUndoRedo.current) return;
     const h = historyRef.current.slice(0, historyIndex.current + 1);
     if (h[h.length - 1] === text) return;
@@ -434,8 +431,8 @@ export default function Writer() {
       setSelection({ start, end, text: text.substring(start, end) });
       const rect = ta.getBoundingClientRect();
       setSelBarPos({
-        x: Math.min(rect.left + 12, window.innerWidth - 150),
-        y: Math.min(rect.top + 40, window.innerHeight - 100),
+        x: Math.max(8,Math.min(rect.left+(rect.width-264)/2,window.innerWidth-272)),
+        y: Math.max((window.visualViewport?.offsetTop||0)+8,Math.min(rect.top+8,(window.visualViewport?.offsetTop||0)+(window.visualViewport?.height||innerHeight)-64)),
       });
       setShowSelBar(true);
     } else {
@@ -444,6 +441,8 @@ export default function Writer() {
     }
   };
 
+  const selectionUpdater=useRef(updateSelection);selectionUpdater.current=updateSelection;
+  useEffect(()=>{let frame=0;const refresh=()=>{if(document.activeElement!==taRef.current)return;cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>selectionUpdater.current());};document.addEventListener('selectionchange',refresh);window.visualViewport?.addEventListener('resize',refresh);window.visualViewport?.addEventListener('scroll',refresh);return()=>{cancelAnimationFrame(frame);document.removeEventListener('selectionchange',refresh);window.visualViewport?.removeEventListener('resize',refresh);window.visualViewport?.removeEventListener('scroll',refresh);};},[]);
   const applyPrefix = (wrap: (s: string) => string) => {
     if (!selection) return;
     const { start, end, text: sel } = selection;
@@ -503,15 +502,8 @@ export default function Writer() {
     showNotif('Comentario de párrafo guardado');
   };
 
-  const onTouchStart = () => {
-    const ta = taRef.current;
-    if (!ta) return;
-    longPressTimer.current = window.setTimeout(() => openParaComment(ta.selectionStart), 550);
-  };
-
-  const onTouchEnd = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-  };
+  const onTouchStart = () => {if(longPressTimer.current)clearTimeout(longPressTimer.current);};
+  const onTouchEnd = () => {if(longPressTimer.current)clearTimeout(longPressTimer.current);requestAnimationFrame(()=>updateSelection());};
 
   /* ---------- Marcos ---------- */
   const insertAction = (content: string) => {
@@ -899,7 +891,7 @@ export default function Writer() {
 
       <div className="w-top">
         <button className="icon" onClick={exitToBiblias} title="Volver a Biblias Maker">↲</button>
-        <span className="title">{activeHoja?.name || 'Modo Escritor'}</span>
+        <span className="title" title="Doble clic para cambiar el nombre" onDoubleClick={()=>setRenameId(activeHojaId)}>{'Hoja '+Math.max(1,hojas.filter(h=>!h.closed).findIndex(h=>h.id===activeHojaId)+1)}</span>
         <DraggableCounter count={charCount}/>
         <button className="icon" onClick={toggleVoice} title="Voz">
           {isSpeaking ? '⏹' : '▶'}
@@ -939,7 +931,7 @@ export default function Writer() {
 
       {/* Flotantes izq: undo / redo */}
       <div className="w-float left">
-          <button aria-label="Abrir decoración y letras" title={decorations.base.enabled?"Decoración · estilo base activo":"Decoración y letras"} onClick={()=>decorations.open()} style={{display:"grid",placeItems:"center"}}><Sparkles size={19}/></button>
+          <button className="decor-quick-entry" aria-label="Abrir decoración y letras" title={decorations.base.enabled?"Decoración · estilo base activo":"Decoración y letras"} onClick={()=>decorations.open()} style={{display:"grid",placeItems:"center"}}><Sparkles size={19}/></button>
         <button onClick={undo} title="Deshacer (Ctrl+Z)">↶</button>
         <button onClick={redo} title="Rehacer (Ctrl+Y)">↷</button>
       </div>
@@ -962,6 +954,7 @@ export default function Writer() {
           <button onClick={() => { setShowPaper(true); setShowOptions(false); }}>🎨 Color de hoja</button>
           <button onClick={() => { setShowPreview(true); setShowOptions(false); }}>👁 Vista previa</button>
           <button className="decor-entry" onClick={() => {decorations.open();setShowOptions(false);}}><Sparkles size={17}/> Decoración y letras</button>
+          <button onClick={()=>{openParaComment(taRef.current?.selectionStart||0);setShowOptions(false);}}><MessageSquare size={17}/> Comentar párrafo actual</button>
           <button onClick={() => { setShowActions(true); setShowOptions(false); }}>📋 Marcos</button>
           <button onClick={() => { review.start(); setShowOptions(false); }}>🔍 Revisar ortografía</button>
           <button onClick={() => { setShowComments(true); setShowOptions(false); }}>💬 Comentarios</button>
@@ -996,12 +989,12 @@ export default function Writer() {
       )}
 
       {showSelBar && selection && (
-        <div className="w-sel" style={{ left: selBarPos.x, top: selBarPos.y }}>
-          <button title="Comentar" onClick={() => { setSelCommentText(''); setShowSelComment(true); }}>💬</button>
-          <button title="Prefijos" onClick={() => setShowPrefixPlatform(true)}>𝒯</button>
-          <button title="Enmarcar selección" aria-label="Enmarcar selección" onClick={() => {decorations.open('frames');setShowSelBar(false);}}><Frame size={17}/></button>
-          <button title="Cambiar letras de la selección" aria-label="Cambiar letras de la selección" onClick={() => {decorations.open('text');setShowSelBar(false);}}><Type size={17}/></button>
-          <button title="Leer selección" onClick={() => startVoice(true)}>▶</button>
+        <div className="w-sel" role="toolbar" aria-label="Acciones de la selección" onPointerDown={e=>e.preventDefault()} style={{ left: selBarPos.x, top: selBarPos.y }}>
+          <button title="Comentar" onClick={() => { setSelCommentText(''); setShowSelComment(true); }}><MessageSquare size={19}/></button>
+          <button title="Prefijos" onClick={() => setShowPrefixPlatform(true)}><TextQuote size={19}/></button>
+          <button title="Enmarcar selección" aria-label="Enmarcar selección" onClick={() => {decorations.open('frames');setShowSelBar(false);}}><RectangleHorizontal size={19}/></button>
+          <button title="Cambiar letras de la selección" aria-label="Cambiar letras de la selección" onClick={() => {decorations.open('text');setShowSelBar(false);}}><Type size={19}/></button>
+          <button title="Leer selección" onClick={() => startVoice(true)}><Play size={19}/></button>
         </div>
       )}
 
@@ -1010,27 +1003,8 @@ export default function Writer() {
       <ProofreadingDialog review={review} writer />
 
       {/* Hojas */}
-      {showHojas && (
-        <div className="w-backdrop" onClick={() => setShowHojas(false)}>
-          <div className="w-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Hojas</h3>
-            <button className="full" onClick={addHoja}>➕ Nueva hoja</button>
-            <button className="full" onClick={importFromBiblias}>📥 Importar de Biblias Maker</button>
-            {hojas.map((h) => (
-              <div
-                key={h.id}
-                className={`hoja-row ${h.id === activeHojaId ? 'active' : ''}`}
-                onClick={() => switchHoja(h.id)}
-              >
-                <span className="name">{h.name}</span>
-                <span className="sm" onClick={(e) => { e.stopPropagation(); renameHoja(h.id); }}>✏️</span>
-                <span className="sm" onClick={(e) => { e.stopPropagation(); closeHoja(h.id); }}>✕</span>
-              </div>
-            ))}
-            <button className="full cancel" onClick={() => setShowHojas(false)}>Cerrar</button>
-          </div>
-        </div>
-      )}
+      {showHojas&&<SheetManager sheets={hojas.map(h=>h.id===activeHojaId?{...h,content:text}:h)} current={activeHojaId} open={switchHoja} rename={renameHoja} create={addHoja} importSheets={importFromBiblias} close={()=>setShowHojas(false)}/>}
+      {renameId&&<RenameSheetDialog key={renameId} name={hojas.find(h=>h.id===renameId)?.name||''} close={()=>setRenameId(null)} save={name=>{setHojas(p=>p.map(h=>h.id===renameId?{...h,name}:h));setRenameId(null);}}/>}
 
       {showTheme&&<div className="w-backdrop" onClick={()=>setShowTheme(false)}><div onClick={e=>e.stopPropagation()}><ThemeSwitcher onClose={()=>setShowTheme(false)} onPaper={()=>{setShowTheme(false);setShowPaper(true);}}/></div></div>}
       {/* Color de hoja */}
@@ -1176,4 +1150,3 @@ export default function Writer() {
   );
 }
 
-//Acomodar el contador dentro del banner de Modo Escritor

@@ -44,3 +44,4 @@ export function styledInput(previous:string,next:string,caret:number,id:string,d
 
 const reverse=new Map<string,string>();for(const style of LETTER_STYLES)for(const [i,c]of [...((style.upper||source.slice(0,26))+(style.lower||source.slice(26,52))+(style.digits||source.slice(52)))].entries())if(c!==source[i])reverse.set(c,source[i]);
 export function readableText(text:string){return [...text.normalize('NFKC')].map(c=>reverse.get(c)||c).join('').replace(/[\u0332\u0333\u0336\u0338\u0305\u0359]/g,'');}
+export function spokenText(text:string){return readableText(text).replace(/```([\s\S]*?)```/g,(_,body:string)=>{const letters=(body.match(/[\p{L}\p{N}]/gu)||[]).length;return letters>body.trim().length*.4?body:' ';}).replace(/\[(?:[BICUS]+|Figura\s+\d+(?:\.\d+)?)\]/gi,'').replace(/https?:\/\/\S+/g,' ').replace(/[^\p{L}\p{M}\p{N}\s.,;:¿?¡!()«»"'’%+\-]/gu,' ').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();}

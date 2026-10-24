@@ -27,4 +27,17 @@ button {
   cursor: pointer;
   border: none;
   outline: none;
-}
+}/* Keep the native text selection usable above the keyboard. */
+.sel-bar,.w-sel{display:flex!important;align-items:center;justify-content:center;gap:5px!important;width:264px;max-width:calc(100vw - 16px);box-sizing:border-box;padding:7px!important;bottom:auto!important;transform:none!important;border:1px solid var(--ui-line)!important;background:color-mix(in srgb,var(--ui-surface) 94%,transparent)!important;backdrop-filter:blur(16px);border-radius:16px!important;z-index:1200!important}
+.sel-bar button,.w-sel button{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;flex:0 0 44px;border-radius:11px!important;box-shadow:none!important;background:var(--ui-soft)!important;color:var(--ui-text)!important;border:1px solid var(--ui-line)!important;line-height:1!important}
+.sel-bar button svg,.w-sel button svg{display:block;flex-shrink:0;stroke-width:1.8}.sel-bar button:hover,.w-sel button:hover{border-color:var(--ui-accent)!important}
+/* Compact numbered tabs. Closing archives the sheet; it never deletes the draft. */
+.hojas-bar{gap:6px!important;padding:5px 10px!important;scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.4) transparent}
+.hojas-bar::-webkit-scrollbar{height:3px!important}.hojas-bar::-webkit-scrollbar-track{background:transparent!important}.hojas-bar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.4)!important;border-radius:8px}
+.hojas-bar .hoja-tab{position:relative;min-height:30px!important;height:30px!important;padding:4px 28px 4px 12px!important;gap:0!important;font-size:12px!important;border-radius:16px!important}
+.hojas-bar .hoja-tab>span:first-child{display:flex;align-items:center;min-height:20px;padding:0!important}
+.hojas-bar button.hoja-tab{padding:4px 10px!important;min-width:30px!important}
+.hojas-bar .close-sheet-tab{position:absolute;right:3px;top:3px;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important;border-radius:50%!important;background:rgba(0,0,0,.12)!important;color:inherit!important;font-size:14px!important;line-height:1!important;opacity:.6;display:grid;place-items:center}
+.hojas-bar .close-sheet-tab:hover,.hojas-bar .close-sheet-tab:focus-visible{opacity:1;background:rgba(0,0,0,.3)!important}
+@media(max-width:700px),(hover:none) and (pointer:coarse){.decor-quick-entry,.bm-page button[aria-label="Abrir decoración y letras"],.writer-page button[aria-label="Abrir decoración y letras"]{display:none!important}}
+@media(max-width:700px){.sel-bar,.w-sel{top:unset}}

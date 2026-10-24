@@ -13,12 +13,26 @@ export async function installationPackage():Promise<Package>{
 }
 async function valid(cache:Cache,a:Asset){const hit=await cache.match(a.url);return !!hit&&hit.headers.get('x-rbc-size')===String(a.size)&&(!a.hash||hit.headers.get('x-rbc-hash')===a.hash);}
 export async function installed(pack:Package){
+ const current=await caches.open(pack.cache),currentVoices=await caches.open(MODELS);
+ if((await Promise.all([...pack.entries.map(a=>valid(current,a)),...pack.voices.map(a=>valid(currentVoices,a))])).every(Boolean))return true;
  const state=await caches.open(STATE),record=await state.match(stateKey('installed'));if(!record)return false;
  const saved=await record.json() as Package;
  if(!(await caches.has(saved.cache)))return false;
  const core=await caches.open(saved.cache),voices=await caches.open(MODELS);
  // Checking headers is cheap: models are not loaded into memory at startup.
  const checks=await Promise.all([...saved.entries.map(a=>valid(core,a)),...pack.voices.map(a=>valid(voices,a))]);return checks.every(Boolean);
+}
+export async function savedProgress(pack:Package):Promise<Progress&{assets:Record<string,number>;complete:boolean}>{
+ const core=await caches.open(pack.cache),voices=await caches.open(MODELS),parts=await caches.open('rbc-download-parts-v1');
+ const old=pack.native?[]:(await caches.keys()).filter(k=>k.startsWith('rbc-easy-shell-')&&k!==pack.cache);
+ const keys=await parts.keys();let done=0,complete=true;const assets:Record<string,number>={};
+ for(const a of [...pack.entries,...pack.voices]){const cache=pack.voices.includes(a)?voices:core;let found=await valid(cache,a);
+  if(!found&&a.hash)for(const name of old){if(await valid(await caches.open(name),a)){found=true;break;}}
+  if(found){done+=a.size;assets[a.url]=a.size;continue;}
+  complete=false;const versions=new Map<string,number>();for(const key of keys){if(!key.url.startsWith('https://rbc-parts.invalid/'+encodeURIComponent(a.url)+'?'))continue;const u=new URL(key.url),hit=await parts.match(key);const size=Number(hit?.headers.get('x-rbc-size')||0),v=u.searchParams.get('version')||'';versions.set(v,(versions.get(v)||0)+size);}
+  assets[a.url]=Math.min(a.size,Math.max(0,...versions.values()));done+=assets[a.url];
+ }
+ const total=[...pack.entries,...pack.voices].reduce((n,a)=>n+a.size,0);return{done:complete?done:Math.min(done,Math.max(0,total-1)),total,label:'Contenido guardado en este dispositivo',assets,complete};
 }
 export type InstallResult={complete:boolean;failed:{url:string;name:string;error:string}[]};
 let active:Promise<InstallResult>|undefined;
@@ -28,8 +42,9 @@ export function installPackage(pack:Package,onProgress:(p:Progress)=>void,signal
  active??=run(pack,p=>subscribers.forEach(fn=>fn(p)),signal).finally(()=>{active=undefined;});return active.finally(()=>subscribers.delete(onProgress));
 }
 async function run(pack:Package,onProgress:(p:Progress)=>void,signal?:AbortSignal){
- const assets=[...pack.entries,...pack.voices],total=assets.reduce((sum,a)=>sum+a.size,0),progress=new Map<Asset,number>();let last=0,networkBytes=0;const started=performance.now();
- const report=(label:string,force=false)=>{const now=performance.now();if(force||now-last>100){last=now;onProgress({done:[...progress.values()].reduce((a,b)=>a+b,0),total,label,bytesPerSecond:networkBytes/Math.max(1,(now-started)/1000)});}};
+ const assets=[...pack.entries,...pack.voices],total=assets.reduce((sum,a)=>sum+a.size,0),progress=new Map<Asset,number>();let last=0,networkBytes=0;const samples:{time:number;bytes:number}[]=[];
+ const baseline=await savedProgress(pack);for(const a of assets)progress.set(a,baseline.assets[a.url]||0);onProgress(baseline);
+ const report=(label:string,force=false)=>{const now=performance.now();if(force||now-last>160){last=now;samples.push({time:now,bytes:networkBytes});while(samples.length>2&&samples[0].time<now-4000)samples.shift();const first=samples[0];onProgress({done:Math.max(baseline.done,[...progress.values()].reduce((a,b)=>a+b,0)),total,label,bytesPerSecond:(networkBytes-first.bytes)/Math.max(.25,(now-first.time)/1000)});}};
  const core=await caches.open(pack.cache),voices=await caches.open(MODELS);
  const older=pack.native?[]:(await caches.keys()).filter(k=>k.startsWith('rbc-easy-shell-')&&k!==pack.cache);
  const checkAbort=()=>{if(signal?.aborted)throw new DOMException('Descarga pausada','AbortError');};
@@ -50,12 +65,12 @@ async function run(pack:Package,onProgress:(p:Progress)=>void,signal?:AbortSigna
  const failed:InstallResult['failed']=[];
  const attempt=async(a:Asset,cache:Cache)=>{try{await transfer(a,cache);}catch(error){if(signal?.aborted)throw error;failed.push({url:a.url,name:a.name||a.url,error:error instanceof Error?error.message:String(error)});report('Omitido · '+(a.name||a.url)+'. Continuando con el siguiente archivo…',true);}};
  // Core assets have bounded concurrency; large models use resumable parallel segments.
- let cursor=0,abortError:unknown;await Promise.all(Array.from({length:Math.min(6,parallelism()+2)},async()=>{while(cursor<pack.entries.length&&!abortError){try{if(signal?.aborted)throw new DOMException('Descarga pausada','AbortError');await attempt(pack.entries[cursor++],core);}catch(error){abortError=error;}}}));if(abortError)throw abortError;
+ let cursor=0,abortError:unknown;await Promise.all(Array.from({length:Math.min(10,parallelism()+2)},async()=>{while(cursor<pack.entries.length&&!abortError){try{if(signal?.aborted)throw new DOMException('Descarga pausada','AbortError');await attempt(pack.entries[cursor++],core);}catch(error){abortError=error;}}}));if(abortError)throw abortError;
  const coreReady=!failed.length;if(!pack.native&&coreReady)await core.put('/__rbc_complete',new Response('ready'));
- for(const a of pack.voices){if(signal?.aborted)throw new DOMException('Descarga pausada','AbortError');await attempt(a,voices);}
+ let voiceCursor=0;await Promise.all(Array.from({length:Math.min(2,parallelism())},async()=>{while(voiceCursor<pack.voices.length){if(signal?.aborted)throw new DOMException('Descarga pausada','AbortError');await attempt(pack.voices[voiceCursor++],voices);}}));
  if(signal?.aborted)throw new DOMException('Descarga pausada','AbortError');
  const complete=!failed.length,state=await caches.open(STATE);await state.put(stateKey('pending'),jsonResponse(failed));
- if(complete)await state.put(stateKey('installed'),jsonResponse(pack));
+ if(complete){await state.put(stateKey('installed'),jsonResponse(pack));try{localStorage.setItem('rbc-install-complete','1');}catch{}}
  await navigator.storage?.persist?.().catch(()=>false);
  report(complete?'Instalación completa':failed.length+' archivos pendientes. El resto ya está disponible.',true);
  if(!complete)return{complete,failed};

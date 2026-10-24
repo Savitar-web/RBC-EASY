@@ -167,7 +167,7 @@ export default function Home() {
           <h1>RBC-EASY</h1>
           <div className="author">Autor · Savitar</div>
 
-          <button className="start-button" disabled={loading} onClick={() => navigate(user?'/proyectos':'/cuenta')}>
+          <button className="start-button" disabled={loading&&!localStorage.getItem('rbc-entered-locally')} onClick={() => navigate(user||localStorage.getItem('rbc-entered-locally')?'/proyectos':'/cuenta?from=start')}>
             Empezar
           </button>
 

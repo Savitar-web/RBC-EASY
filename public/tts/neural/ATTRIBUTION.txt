@@ -6,3 +6,58 @@ ONNX Runtime Web 1.18.0 (MIT). Piper phonemizer: @diffusionstudio/piper-wasm 1.0
 
 Daniela (Argentina, high): trained by larcanio; OpenSLR 61 dataset, CC BY-SA 4.0. https://huggingface.co/rhasspy/piper-voices/blob/main/es/es_AR/daniela/high/MODEL_CARD
 Claude (Mexico, high): Apache-2.0 dataset. https://huggingface.co/rhasspy/piper-voices/blob/main/es/es_MX/claude/high/MODEL_CARD
+
+
+es_ES-sharvard-medium
+# Model card for sharvard (medium)
+
+* Language: es_ES (Spanish, Spain)
+* Speakers: 2
+* Quality: medium
+* Samplerate: 22,050Hz
+
+## Dataset
+
+* URL: https://datashare.ed.ac.uk/handle/10283/574
+* License: http://creativecommons.org/licenses/by/3.0/
+* Paper: https://www.tandfonline.com/doi/abs/10.3109/14992027.2014.907507
+
+## Training
+
+Finetuned from U.S. English lessac voice (medium quality).
+
+
+es_ES-mls_10246-low
+# Model card for mls_10246 (low)
+
+* Language: es_ES (Spanish, Spain)
+* Speakers: 1
+* Quality: low
+* Samplerate: 16,000Hz
+
+## Dataset
+
+* URL: http://www.openslr.org/94/
+* License: CC BY 4.0
+
+## Training
+
+Finetuned from U.S. English Ryan voice (low quality).
+
+
+es_ES-mls_9972-low
+# Model card for mls_9972 (low)
+
+* Language: es_ES (Spanish, Spain)
+* Speakers: 1
+* Quality: low
+* Samplerate: 16,000Hz
+
+## Dataset
+
+* URL: http://www.openslr.org/94/
+* License: CC BY 4.0
+
+## Training
+
+Finetuned from U.S. English Ryan voice (low quality).

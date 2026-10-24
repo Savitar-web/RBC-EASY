@@ -8,6 +8,7 @@ const config: CapacitorConfig = {
     path: 'android',
     allowMixedContent: false,
     webContentsDebuggingEnabled: false,
+    adjustMarginsForEdgeToEdge: 'auto',
   },
   server: {
     androidScheme: 'https',

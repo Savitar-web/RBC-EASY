@@ -5,6 +5,7 @@ self.onmessage=async({data})=>{try{
  self.postMessage({stage:session?'Preparando texto':'Cargando motor y voz local'});
  if(!session)session=await TtsSession.create({voiceId:data.voice,wasmPaths:{onnxWasm:'/tts/neural/',piperData:'/tts/neural/piper_phonemize.data',piperWasm:'/tts/neural/piper_phonemize.wasm'},progress:p=>self.postMessage({stage:'Descargando modelo de voz',loaded:p.loaded,total:p.total,progress:Math.round(p.loaded/Math.max(1,p.total)*100)})});
  session.speed=Math.max(.5,Math.min(2,data.speed||1));
+ session.speakerId=Number(data.speaker)||0;
  self.postMessage({stage:'Generando voz neural'});
  const wav=await session.predict(data.text),buffer=await wav.arrayBuffer(),view=new DataView(buffer);
  let rate=22050,bits=16,format=1,channels=1,start=44,length=buffer.byteLength-44;

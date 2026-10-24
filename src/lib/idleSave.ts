@@ -1,0 +1,4 @@
+/** Debounce disk writes, then run between frames. Pagehide still calls the immediate flush. */
+export function idleSave(save:()=>void,delay=350){let cancelled=false,idle:number|undefined;const host=window as Window&{requestIdleCallback?:(fn:()=>void,options:{timeout:number})=>number;cancelIdleCallback?:(id:number)=>void};const timer=window.setTimeout(()=>{if(host.requestIdleCallback)idle=host.requestIdleCallback(()=>{if(!cancelled)save();},{timeout:1200});else if(!cancelled)save();},delay);return()=>{cancelled=true;clearTimeout(timer);if(idle!==undefined)host.cancelIdleCallback?.(idle);};}
+/** Arrays of figures/comments do not need serialising again for every typed character. */
+export function draftMetadata(){const references=new Map<string,unknown>();return(key:string,value:unknown)=>{if(references.has(key)&&references.get(key)===value)return;const encoded=JSON.stringify(value);localStorage.setItem(key,encoded);references.set(key,value);};}

@@ -1,5 +1,7 @@
+import {idleSave,draftMetadata} from '../../lib/idleSave';
+import {RenameSheetDialog,SheetManager} from '../../components/SheetDialogs';
 import {useDecorations} from '../../decorations/useDecorations';
-import {Sparkles,Frame,Type} from 'lucide-react';
+import {Sparkles,RectangleHorizontal,Type,TextQuote,MessageSquare,Play} from 'lucide-react';
 import {saveAs} from '../../components/DownloadCenter';
 import SaveLibraryDialog from '../../components/SaveLibraryDialog';
 import {roleHtml,roleCSS,localFigures} from '../../lib/roleFormat';
@@ -27,7 +29,7 @@ interface Figure {
   name?: string;
 }
 
-interface Hoja {
+interface Hoja { closed?:boolean;
   id: string;
   name: string;
   content: string;
@@ -140,13 +142,15 @@ export default function BibliasMaker() {
   const stopVoiceRef = useRef<() => void>(() => {});
   const longPressTimer = useRef<number | null>(null);
 
+  const [draftReady,setDraftReady]=useState(false);
+  const [renameId,setRenameId]=useState<string|null>(null);
   const [hojas, setHojas] = useState<Hoja[]>([]);
   const [activeHojaId, setActiveHojaId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [figures, setFigures] = useState<Figure[]>([]);
   const [actions, setActions] = useState<Action[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [charCount, setCharCount] = useState(0);
+  const charCount = text.length;
 
   const [showOptions, setShowOptions] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -442,6 +446,7 @@ export default function BibliasMaker() {
       localStorage.removeItem('currentFileMime');
     }
 
+    setDraftReady(true);
     const loadVoices = () => {
       const list = (window.speechSynthesis?.getVoices?.() || [])
         .sort((a,b)=>Number(b.lang.startsWith('es'))-Number(a.lang.startsWith('es'))||Number(/Microsoft/i.test(b.name))-Number(/Microsoft/i.test(a.name)))
@@ -496,37 +501,41 @@ export default function BibliasMaker() {
     historyIndex.current = 0;
   };
 
-  const latestDraft = useRef({ text, hojas, activeHojaId, figures, actions, comments });
-  latestDraft.current = { text, hojas, activeHojaId, figures, actions, comments };
+  const metadata=useRef(draftMetadata());
+  const flushDraft=useRef<()=>void>(()=>{});
+  useEffect(()=>()=>flushDraft.current(),[]);
+  const latestDraft = useRef({ draftReady, text, hojas, activeHojaId, figures, actions, comments });
+  latestDraft.current = { draftReady, text, hojas, activeHojaId, figures, actions, comments };
   useEffect(() => {
     const flush = () => {
-      const { text, hojas, activeHojaId, figures, actions, comments } = latestDraft.current;
+      const { draftReady, text, hojas, activeHojaId, figures, actions, comments } = latestDraft.current;
+      if(!draftReady)return;
       if (activeHojaId) {
         const next = hojas.map(h => h.id === activeHojaId ? {...h, content:text, lastModified:Date.now()} : h);
         try { localStorage.setItem(HOJAS_KEY, JSON.stringify(next)); localStorage.setItem('biblias_active_hoja',activeHojaId); } catch { /* existing IndexedDB backup remains available */ }
         saveToDB(text);
       }
       try {
-        localStorage.setItem(FIGURES_KEY, JSON.stringify(figures));
-        localStorage.setItem(ACTIONS_KEY, JSON.stringify(actions));
-        localStorage.setItem(COMMENTS_KEY, JSON.stringify(comments));
+        metadata.current(FIGURES_KEY, figures);
+        metadata.current(ACTIONS_KEY, actions);
+        metadata.current(COMMENTS_KEY, comments);
       } catch { /* */ }
     };
-    const id = window.setTimeout(flush, 500);
+    flushDraft.current=flush;
+    const cancelSave = idleSave(flush);
     const hide = () => { if (document.visibilityState === 'hidden') flush(); };
     window.addEventListener('pagehide', flush); document.addEventListener('visibilitychange', hide);
-    return () => { clearTimeout(id); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hide); flush(); };
-  }, [text, activeHojaId, figures, actions, comments]);
+    return () => { cancelSave(); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hide); };
+  }, [draftReady, text, hojas, activeHojaId, figures, actions, comments]);
 
   useEffect(() => {
-    setCharCount(text.length);
     pushHistory(text);
   }, [text]);
 
   /* ===================== HOJAS ===================== */
   const createHoja = (name = `Hoja ${hojas.length + 1}`, content = '') => {
     const n: Hoja = { id: crypto.randomUUID(), name, content, figures: [], lastModified: Date.now() };
-    setHojas((p) => [...p, n]);
+    setHojas((p) => [...p.map(h=>h.id===activeHojaId?{...h,content:text}:h), n]);
     setActiveHojaId(n.id);
     setText(content);
     historyRef.current = [content]; historyIndex.current = 0;
@@ -534,6 +543,8 @@ export default function BibliasMaker() {
   };
 
   const switchHoja = (id: string) => {
+    if(id===activeHojaId){setShowHojasMenu(false);return;}
+    setHojas(p=>p.map(h=>h.id===id?{...h,closed:false}:h));
     setHojas((p) => p.map((h) => (h.id === activeHojaId ? { ...h, content: text } : h)));
     const h = hojas.find((x) => x.id === id);
     if (h) {
@@ -543,18 +554,11 @@ export default function BibliasMaker() {
     }
   };
 
-  const closeHoja = (id: string) => {
-    if (hojas.length <= 1) {
-      alert('Debes tener al menos una hoja');
-      return;
-    }
-    const rest = hojas.filter((h) => h.id !== id);
-    setHojas(rest);
-    if (activeHojaId === id) {
-      setActiveHojaId(rest[0].id);
-      setText(rest[0].content);
-      historyRef.current = [rest[0].content]; historyIndex.current = 0;
-    }
+  const closeHoja = (id:string) => {
+    const available=hojas.filter(h=>!h.closed&&h.id!==id);if(!available.length){showNotif('Mantén al menos una hoja abierta. Las demás quedan en Hojas.');return;}
+    setHojas(p=>p.map(h=>({...h,...(h.id===activeHojaId?{content:text}:{}),...(h.id===id?{closed:true}:{})})));
+    if(activeHojaId===id){const next=available[0];setActiveHojaId(next.id);setText(next.content);historyRef.current=[next.content];historyIndex.current=0;}
+    showNotif('Hoja conservada. Puedes volver a abrirla desde Hojas.');
   };
 
   /* ===================== FIGURAS ===================== */
@@ -657,8 +661,8 @@ export default function BibliasMaker() {
       setSelection({ start, end, text: text.substring(start, end) });
       const rect = ta.getBoundingClientRect();
       setSelBarPos({
-        x: Math.min(rect.left + 16, window.innerWidth - 160),
-        y: Math.min(rect.top + 48, window.innerHeight - 90),
+        x: Math.max(8,Math.min(rect.left+(rect.width-264)/2,window.innerWidth-272)),
+        y: Math.max((window.visualViewport?.offsetTop||0)+8,Math.min(rect.top+8,(window.visualViewport?.offsetTop||0)+(window.visualViewport?.height||innerHeight)-64)),
       });
       setShowSelBar(true);
     } else {
@@ -667,6 +671,8 @@ export default function BibliasMaker() {
     }
   };
 
+  const selectionUpdater=useRef(updateSelection);selectionUpdater.current=updateSelection;
+  useEffect(()=>{let frame=0;const refresh=()=>{if(document.activeElement!==textareaRef.current)return;cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>selectionUpdater.current());};document.addEventListener('selectionchange',refresh);window.visualViewport?.addEventListener('resize',refresh);window.visualViewport?.addEventListener('scroll',refresh);return()=>{cancelAnimationFrame(frame);document.removeEventListener('selectionchange',refresh);window.visualViewport?.removeEventListener('resize',refresh);window.visualViewport?.removeEventListener('scroll',refresh);};},[]);
   const applyPrefixCommand = (wrap: (s: string) => string) => {
     if (!selection) return;
     const { start, end, text: sel } = selection;
@@ -711,15 +717,8 @@ export default function BibliasMaker() {
     setShowParaComment(true);
   };
 
-  const onTouchStart = () => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    longPressTimer.current = window.setTimeout(() => openParaComment(ta.selectionStart), 550);
-  };
-
-  const onTouchEnd = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-  };
+  const onTouchStart = () => {if(longPressTimer.current)clearTimeout(longPressTimer.current);};
+  const onTouchEnd = () => {if(longPressTimer.current)clearTimeout(longPressTimer.current);requestAnimationFrame(()=>updateSelection());};
 
   const saveParaComment = () => {
     if (paraIndex < 0 || !activeHojaId) return;
@@ -954,7 +953,7 @@ export default function BibliasMaker() {
           .bm-title{font-size:14px;padding:6px 14px}
           .bm-textarea{font-size:15px;border-radius:18px}
           .char-bubble{font-size:16px;padding:10px 20px;min-width:120px}
-          .sel-bar{left:50%!important;transform:translateX(-50%);bottom:120px;top:auto!important}
+          
           .preview-header .title-nav span{max-width:100px;font-size:12px}
         }
       `}</style>
@@ -974,15 +973,17 @@ export default function BibliasMaker() {
       </div>
 
       <div className="hojas-bar">
-        {hojas.map((h) => (
+        {hojas.filter(h=>!h.closed).map((h,index) => (
           <div
             key={h.id}
             className={`hoja-tab ${h.id === activeHojaId ? 'active' : ''}`}
+            title={h.name+' · Doble clic para cambiar el nombre'}
+            onDoubleClick={()=>setRenameId(h.id)}
             onClick={() => switchHoja(h.id)}
           >
-            <span>{h.name}</span>
-            {hojas.length > 1 && (
-              <span onClick={(e) => { e.stopPropagation(); closeHoja(h.id); }}>×</span>
+            <span>Hoja {index+1}</span>
+            {hojas.filter(h=>!h.closed).length > 1 && (
+              <button className="close-sheet-tab" aria-label={"Cerrar pestaña de "+h.name} title="Guardar y cerrar pestaña" onDoubleClick={e=>e.stopPropagation()} onClick={(e) => { e.stopPropagation(); closeHoja(h.id); }}>×</button>
             )}
           </div>
         ))}
@@ -1018,7 +1019,7 @@ export default function BibliasMaker() {
 
       <div className="bottom-row">
         <div className="bottom-left">
-          <button className="round-btn" aria-label="Abrir decoración y letras" title={decorations.base.enabled?"Decoración · estilo base activo":"Decoración y letras"} onClick={()=>decorations.open()} style={{display:"grid",placeItems:"center"}}><Sparkles size={19}/></button>
+          <button className="round-btn decor-quick-entry" aria-label="Abrir decoración y letras" title={decorations.base.enabled?"Decoración · estilo base activo":"Decoración y letras"} onClick={()=>decorations.open()} style={{display:"grid",placeItems:"center"}}><Sparkles size={19}/></button>
           <button className="round-btn" onClick={undo} title="Deshacer">↶</button>
           <button className="round-btn" onClick={redo} title="Rehacer">↷</button>
         </div>
@@ -1037,7 +1038,8 @@ export default function BibliasMaker() {
           <button onClick={() => navigate('/proyectos')}>📂 Mis Proyectos</button>
           <button onClick={() => { setPreviewHojaId(activeHojaId); setShowPreview(true); setShowOptions(false); }}>👁 Vista previa</button>
           <button onClick={() => { setShowHojasMenu(true); setShowOptions(false); }}>📄 Hojas</button>
-          <button className="decor-entry" onClick={() => {decorations.open();setShowOptions(false);}}><Sparkles size={17}/>👾 Decoración y letras</button>
+          <button className="decor-entry" onClick={() => {decorations.open();setShowOptions(false);}}><Sparkles size={17}/> Decoración 👾</button>
+          <button onClick={()=>{openParaComment(textareaRef.current?.selectionStart||0);setShowOptions(false);}}><MessageSquare size={17}/> Comentar párrafo</button>
           <button onClick={() => { setShowActions(true); setShowOptions(false); }}>📋 Marcos</button>
           <button onClick={() => { setShowCommentsPanel(true); setShowOptions(false); }}>💬 Comentarios</button>
           <button onClick={() => { setShowBibleCreator(true); setShowOptions(false); }}>📚 Crear Biblias</button>
@@ -1055,12 +1057,12 @@ export default function BibliasMaker() {
       )}
 
       {showSelBar && selection && (
-        <div className="sel-bar" style={{ left: selBarPos.x, top: selBarPos.y }}>
-          <button title="Comentar" onClick={() => { setSelCommentText(''); setShowSelComment(true); }}>💬</button>
-          <button title="Prefijos" onClick={() => setShowPrefixPlatform(true)}>𝒯</button>
-          <button title="Enmarcar selección" aria-label="Enmarcar selección" onClick={() => {decorations.open('frames');setShowSelBar(false);}}><Frame size={17}/></button>
-          <button title="Cambiar letras de la selección" aria-label="Cambiar letras de la selección" onClick={() => {decorations.open('text');setShowSelBar(false);}}><Type size={17}/></button>
-          <button title="Leer selección" onClick={() => startVoice(true)}>▶</button>
+        <div className="sel-bar" role="toolbar" aria-label="Acciones de la selección" onPointerDown={e=>e.preventDefault()} style={{ left: selBarPos.x, top: selBarPos.y }}>
+          <button title="Comentar" onClick={() => { setSelCommentText(''); setShowSelComment(true); }}><MessageSquare size={19}/></button>
+          <button title="Prefijos" onClick={() => setShowPrefixPlatform(true)}><TextQuote size={19}/></button>
+          <button title="Enmarcar selección" aria-label="Enmarcar selección" onClick={() => {decorations.open('frames');setShowSelBar(false);}}><RectangleHorizontal size={19}/></button>
+          <button title="Cambiar letras de la selección" aria-label="Cambiar letras de la selección" onClick={() => {decorations.open('text');setShowSelBar(false);}}><Type size={19}/></button>
+          <button title="Leer selección" onClick={() => startVoice(true)}><Play size={19}/></button>
         </div>
       )}
 
@@ -1282,16 +1284,8 @@ export default function BibliasMaker() {
         </div>
       )}
 
-      {showHojasMenu && (
-        <div className="modal-backdrop" onClick={() => setShowHojasMenu(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Hojas</h3>
-            <button className="full" onClick={() => createHoja()}>Nueva</button>
-            <button className="full" onClick={() => { setShowHojasMenu(false); setShowImportModal(true); }}>Importar</button>
-            <button className="full cancel" onClick={() => setShowHojasMenu(false)}>Cerrar</button>
-          </div>
-        </div>
-      )}
+      {showHojasMenu&&<SheetManager sheets={hojas.map(h=>h.id===activeHojaId?{...h,content:text}:h)} current={activeHojaId} open={switchHoja} rename={setRenameId} create={()=>createHoja()} importSheets={()=>{setShowHojasMenu(false);setShowImportModal(true);}} close={()=>setShowHojasMenu(false)}/>}
+      {renameId&&<RenameSheetDialog key={renameId} name={hojas.find(h=>h.id===renameId)?.name||''} close={()=>setRenameId(null)} save={name=>{setHojas(p=>p.map(h=>h.id===renameId?{...h,name,lastModified:Date.now()}:h));setRenameId(null);}}/>}
 
       {showImportModal && (
         <div className="modal-backdrop" onClick={() => setShowImportModal(false)}>

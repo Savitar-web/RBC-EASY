@@ -16,7 +16,7 @@ async function loadDictionary() {
   return dictionary;
 }
 export function protectedText(text: string) {
-  return text.replace(/```[\s\S]*?```|`[^`\n]*`|data:[^\s]+|https?:\/\/[^\s]+|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\[(?:Figura\s+\d+(?:\.\d+)?|[BICUS]+)\]|<[^>\n]+>/gi, value => ' '.repeat(value.length));
+  return text.replace(/[\p{L}\p{M}]+/gu,word=>/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/u.test(word)?' '.repeat(word.length):word).replace(/```[\s\S]*?```|`[^`\n]*`|data:[^\s]+|https?:\/\/[^\s]+|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\[(?:Figura\s+\d+(?:\.\d+)?|[BICUS]+)\]|<[^>\n]+>/gi, value => ' '.repeat(value.length));
 }
 export async function localReview(text: string, allowed: Set<string>, signal: AbortSignal, editorial = false): Promise<Issue[]> {
   const spell = await loadDictionary();
@@ -39,7 +39,7 @@ export async function localReview(text: string, allowed: Set<string>, signal: Ab
   }
   const rule = (regex: RegExp, message: string, replacement: (match: RegExpMatchArray) => string) => {
     for (const m of clean.matchAll(regex)) {
-      if(editorial && text.slice(m.index!,m.index!+m[0].length)!==m[0])continue;
+      if(text.slice(m.index!,m.index!+m[0].length)!==m[0])continue;
       issues.push({ offset: m.index!, length: m[0].length, word: text.slice(m.index!, m.index! + m[0].length), message, kind: 'typography', suggestions: [replacement(m)] });
     }
   };

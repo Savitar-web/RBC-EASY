@@ -31,6 +31,8 @@
     <title>RBC EASY</title>
   </head>
   <body>
+    <div id="rbc-boot" role="status" style="position:fixed;inset:0;z-index:60001;display:grid;place-items:center;background:linear-gradient(#08080c99,#08080ccc),url('/images/backgrounds/FCC.png') center/cover;background-color:#07070c;color:white;font:16px system-ui">Preparando tu espacio…</div>
+    <script>try{if(localStorage.getItem('rbc-install-complete')||sessionStorage.getItem('rbc-install-later'))document.getElementById('rbc-boot').remove();}catch{}</script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

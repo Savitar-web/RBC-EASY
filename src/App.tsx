@@ -105,6 +105,7 @@ function PageViewport() {
     const editor = /^\/(biblias|writer)\/?$/i.test(pathname);
     const html = document.documentElement;
     html.dataset.appViewport = editor ? 'editor' : 'page';
+    html.dataset.appPage = pathname.toLowerCase();
     if (!editor) {
       // Safari can retain the scroll offset from the keyboard or a previous route.
       document.getElementById('root')?.scrollTo(0, 0);

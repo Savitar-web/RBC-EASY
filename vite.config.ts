@@ -33,6 +33,7 @@ export default defineConfig({
     },
   },
   server: {
+    watch: { ignored: ['**/work/**','**/release/**','**/android/**','**/.desktop-build-*/**'] },
     host: true,
     port: 5173,
     strictPort: false,
