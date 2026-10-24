@@ -1,0 +1,1 @@
+const originalFetch=self.fetch.bind(self);self.fetch=(request,init)=>{const url=typeof request==='string'?request:request.url; if(url.startsWith('https://'))return Promise.reject(new Error('Offline test: external network blocked'));return originalFetch(request,init);};self.importScripts('/tts/neural/worker.js');

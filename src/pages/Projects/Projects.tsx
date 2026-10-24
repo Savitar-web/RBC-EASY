@@ -1,10 +1,14 @@
+import DataPanel from '../../components/DataPanel';
+import LibraryManager from '../../components/LibraryManager';
+import {importRolePDF} from '../../lib/pdfRole';
+import DataTransferDialog from '../../components/DataTransferDialog';
 import {StudioSelect} from '../../components/StudioControls';
 // src/pages/Projects/Projects.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import { saveAs } from '../../components/DownloadCenter';
 
 import BackgroundSettings from '../../components/BackgroundSettings';
 import ShortcutManager from '../../components/ShortcutManager';
@@ -38,7 +42,7 @@ export default function Projects() {
   const [clipboardModal, setClipboardModal] = useState(false);
   const [clipboardText, setClipboardText] = useState('');
   const [clipboardName, setClipboardName] = useState('');
-  const [confirmImport, setConfirmImport] = useState(false);
+  const [transferMode,setTransferMode]=useState<'import'|'export'|null>(null);
   const [backgroundsOpen,setBackgroundsOpen]=useState(false);
   const [shortcutsModal, setShortcutsModal] = useState(false);
 
@@ -80,8 +84,8 @@ export default function Projects() {
     await loadItems();
   };
 
-  const deleteItem = async (id: string) => {
-    if (!window.confirm('¿Eliminar este elemento y todo su contenido?')) return;
+  const deleteItem = async (id: string,confirmed=false) => {
+    if (!confirmed&&!window.confirm('¿Eliminar este elemento y todo su contenido?')) return;
     const db = await initDB();
     const tx = db.transaction(STORE, 'readwrite');
     const store = tx.objectStore(STORE);
@@ -91,7 +95,7 @@ export default function Projects() {
     });
     const toDelete = new Set<string>();
     const collect = (pid: string) => {
-      toDelete.add(pid);
+      if(toDelete.has(pid))return;toDelete.add(pid);
       all.filter((i) => i.parentId === pid).forEach((c) => collect(c.id));
     };
     collect(id);
@@ -215,7 +219,7 @@ export default function Projects() {
       } else if (file.type.startsWith('text') || file.name.match(/\.(txt|md)$/i)) {
         content = await file.text();
       } else if (file.name.match(/\.pdf$/i) || file.type.includes('pdf')) {
-        content = `[PDF] ${file.name}\n\n(Extracción automática de PDF no disponible. Usa TXT o pega el texto.)`;
+        try{content=await importRolePDF(file);}catch(error){alert(String(error));return;}
       } else {
         // Intentar leer como texto; si falla, placeholder
         try {
@@ -256,47 +260,7 @@ export default function Projects() {
     setClipboardName('');
   };
 
-  const exportAll = async () => {
-    if (!window.confirm('⚠️ Se exportará TODO el almacenamiento. ¿Continuar?')) return;
-    const db = await initDB();
-    const tx = db.transaction(STORE, 'readonly');
-    const all = await new Promise<Item[]>((res) => {
-      const r = tx.objectStore(STORE).getAll();
-      r.onsuccess = () => res(r.result || []);
-    });
-    const data = { localStorage: { ...localStorage }, indexedDB: { items: all } };
-    saveAs(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'RBC_EASY_BACKUP.json');
-  };
-
-  const doImport = () => {
-    setConfirmImport(false);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const data = JSON.parse(await file.text());
-        localStorage.clear();
-        Object.entries(data.localStorage || {}).forEach(([k, v]) => localStorage.setItem(k, v as string));
-        const db = await initDB();
-        const tx = db.transaction(STORE, 'readwrite');
-        await new Promise((r) => {
-          tx.objectStore(STORE).clear().onsuccess = r;
-        });
-        for (const item of data.indexedDB?.items || []) {
-          tx.objectStore(STORE).put(item);
-        }
-        await new Promise((r) => (tx.oncomplete = r));
-        alert('✅ Datos importados. Recargando...');
-        location.reload();
-      } catch {
-        alert('Error al importar');
-      }
-    };
-    input.click();
-  };
+  const exportAll=()=>setTransferMode('export');
 
   const downloadAllAsZip = async () => {
     const zip = new JSZip();
@@ -330,7 +294,7 @@ export default function Projects() {
         /* la imagen sigue en public/; no se inventa otra */
       }
     }
-    saveAs(await zip.generateAsync({ type: 'blob' }), 'RBC_EASY_Biblias.zip');
+    await saveAs(await zip.generateAsync({ type: 'blob' }), 'RBC_EASY_Biblias.zip');
   };
 
   const onDragStart = (e: React.DragEvent, item: Item) => {
@@ -905,114 +869,9 @@ export default function Projects() {
           </button>
         </div>
 
-        {/* SIDEBAR IZQUIERDO */}
-        <div className={`sidebar left ${leftOpen ? 'open' : ''}`}>
-          <div className="sidebar-header">
-            <h2>Gestión de Biblias</h2>
-            <button onClick={() => setLeftOpen(false)}>Cerrar</button>
-          </div>
+        <div className={`sidebar left library-sidebar ${leftOpen?'open':''}`}><LibraryManager items={items} folder={currentFolder} setFolder={setCurrentFolder} save={saveItem} remove={id=>deleteItem(id,true)} open={openInBiblias} importFile={()=>setUploadModal(true)} close={()=>setLeftOpen(false)}/></div>
 
-          <div className="sidebar-actions">
-            <button onClick={() => setUploadModal(true)}>📥 Subir Biblia</button>
-            <button
-              onClick={() => setEditMode(!editMode)}
-              style={{ background: editMode ? 'var(--accent-hover)' : undefined }}
-            >
-              {editMode ? '✅ Aplicar' : '🛠️ Editar'}
-            </button>
-            <button onClick={createFolder}>✚ Crear Rol</button>
-            <button onClick={() => setShowSearch(!showSearch)}>🔍 Buscar</button>
-          </div>
-
-          {showSearch && (
-            <input
-              className="search-input"
-              placeholder="Buscar rol o biblia..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
-            />
-          )}
-
-          <div className="breadcrumb">
-            <span onClick={() => setCurrentFolder(null)}>Raíz</span>
-            {breadcrumb.map((b) => (
-              <span key={b.id} onClick={() => setCurrentFolder(b.id)}>
-                {b.name}
-              </span>
-            ))}
-          </div>
-
-          <div className="sidebar-scroll">
-            <ul className="file-list">
-              {visibleItems.map((item) => (
-                <li
-                  key={item.id}
-                  className={item.type === 'folder' ? 'folder' : ''}
-                  draggable={editMode}
-                  onDragStart={(e) => onDragStart(e, item)}
-                  onDragOver={onDragOver}
-                  onDrop={(e) => onDrop(e, item)}
-                  onClick={() => {
-                    if (editMode) return;
-                    if (item.type === 'folder') setCurrentFolder(item.id);
-                    else openInBiblias(item);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, item });
-                  }}
-                >
-                  {item.type === 'folder' ? '📁' : '📄'} {item.name}
-                </li>
-              ))}
-            </ul>
-
-            <div className="info-box">
-              Aquí puedes importar tus biblias en formato .txt, imagen o .gif; también podrás personalizar el nombre y el orden. Al abrir una biblia se crea una <b>nueva hoja</b> en Biblias Maker con el texto, comentarios e imágenes asociadas.
-              <br /><br />
-              <b>Importante:</b> el borrador activo de Biblias Maker no se borra: la biblia se añade como hoja nueva.
-            </div>
-
-            <div className="info-box">
-              Organiza tus turnos por partida.<br />
-              Crea carpetas (roles), arrastra archivos entre ellas.<br />
-              Mantén presionado un ítem para renombrar o eliminar.
-            </div>
-          </div>
-        </div>
-
-        {/* SIDEBAR DERECHO */}
-        <div className={`sidebar right ${rightOpen ? 'open' : ''}`}>
-          <div className="sidebar-header">
-            <h2>Gestión Global</h2>
-            <button onClick={() => setRightOpen(false)}>Cerrar</button>
-          </div>
-
-          <div className="export-content">
-            <button onClick={exportAll}>Exportar datos</button>
-            <button onClick={() => setConfirmImport(true)}>Importar datos</button>
-            <button onClick={downloadAllAsZip}>Descargar biblias</button>
-            <button onClick={() => setShortcutsModal(true)}>Accesos</button>
-            <button onClick={()=>setBackgroundsOpen(true)}>Personalizar fondos</button>
-            <button onClick={()=>window.dispatchEvent(new Event('rbc-open-ambience'))}>Ambiente</button>
-
-            <div style={{ marginTop: 6 }}>
-              <p style={{ margin: '0 0 6px', fontWeight: 600, color: 'var(--accent)', fontSize: 13 }}>
-                🎨 Temas
-              </p>
-              <StudioSelect label="Tema de la aplicación" value={theme} onChange={value=>setTheme(value as typeof theme)} options={themes.map(t=>({value:t.id,label:t.name}))}/>
-            </div>
-
-            <div className="info-box">
-              Esto te permitirá agregar tus datos desde otro dispositivo, el transplante es compatible entre aplicaciones y la versión web.
-              <br /><br />
-              (Windows, Android, iOS, Mac, Linux; entre otros compatibles con RBC-EASY)
-              <br /><br />
-              <b>Importante:</b> Importar nuevos datos reemplazará todas las biblias, borradores, cálculos y marcos actuales por los del archivo importado.
-            </div>
-          </div>
-        </div>
+        <div className={`sidebar right data-sidebar ${rightOpen?'open':''}`}><DataPanel close={()=>setRightOpen(false)} exportData={exportAll} importData={()=>setTransferMode('import')} zip={downloadAllAsZip} backgrounds={()=>setBackgroundsOpen(true)} shortcuts={()=>setShortcutsModal(true)} count={items.filter(i=>i.type==='file').length}/></div>
 
         {(leftOpen || rightOpen) && (
           <div
@@ -1109,22 +968,7 @@ export default function Projects() {
           </div>
         )}
 
-        {confirmImport && (
-          <div className="modal-overlay">
-            <div className="modal">
-              <h3>⚠️ Importar Todo</h3>
-              <p style={{ fontSize: 13, lineHeight: 1.5, color: '#ccc' }}>
-                Esto <b>BORRARÁ todos los datos actuales</b> (roles, biblias, carpetas, borradores…).
-                <br /><br />
-                ¿Continuar?
-              </p>
-              <button onClick={doImport}>Sí, importar</button>
-              <button className="cancel" onClick={() => setConfirmImport(false)}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
+        {transferMode&&<DataTransferDialog mode={transferMode} close={()=>setTransferMode(null)}/>}
 
         {backgroundsOpen&&<BackgroundSettings onClose={()=>setBackgroundsOpen(false)}/>}
         {shortcutsModal&&<ShortcutManager onClose={()=>setShortcutsModal(false)}/>}

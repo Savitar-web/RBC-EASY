@@ -1,0 +1,20 @@
+{
+  "java.import.gradle.java.home": "C:/Program Files/Android/Android Studio/jbr",
+  "java.jdt.ls.java.home": "C:/Program Files/Android/Android Studio/jbr",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-21",
+      "path": "C:/Program Files/Android/Android Studio/jbr",
+      "default": true
+    }
+  ],
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.gradle.wrapper.enabled": true,
+  "java.gradle.buildServer.enabled": "off",
+  "gradle.nestedProjects": [
+    "android"
+  ],
+  "java.import.gradle.version": "8.14.3",
+  "java.import.gradle.home": "C:/Users/SavitarXeno/.gradle/wrapper/dists/gradle-8.14.3-all/10utluxaxniiv4wxiphsi49nj/gradle-8.14.3"
+}

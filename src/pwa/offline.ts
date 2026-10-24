@@ -1,6 +1,6 @@
 /** Existing backgrounds are cached without changing their files. */
 export const BACKGROUND_IMAGES = [
-  '/images/backgrounds/FCC.png', '/images/backgrounds/FNP.png',
+  '/images/backgrounds/Cuenta.png', '/images/backgrounds/FCC.png', '/images/backgrounds/FNP.png',
   '/images/backgrounds/FSH.png', '/images/backgrounds/FT.png',
   '/images/backgrounds/FMA.png', '/images/backgrounds/MA.png',
   '/images/backgrounds/TA.png', '/images/backgrounds/sTP.png',

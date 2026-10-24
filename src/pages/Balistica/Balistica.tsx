@@ -1,3 +1,4 @@
+import {StudioRange} from '../../components/StudioControls';
 /**
  * pages/Balistica/Balistica.tsx
  * Laboratorio balístico — diseño oscuro con rojo, fondo MA.png.
@@ -287,7 +288,7 @@ export default function Balistica() {
               </div>
               <canvas ref={canvas} width={900} height={420} />
               <label className="slider">Velocidad de la animación
-                <input type="range" min="0.4" max="3" step="0.1" value={speed} onChange={(e) => setSpeed(Number(e.target.value))} />
+                <StudioRange label="Velocidad de la animación balística" min={.4} max={3} step={.1} value={speed} onChange={setSpeed}/>
               </label>
             </article>
             <article className="panel">
@@ -306,7 +307,9 @@ export default function Balistica() {
 }
 
 const CSS = `
-.bl{min-height:100vh;min-height:100dvh;color:#f6f6f8;font-family:var(--font-main,system-ui,sans-serif);background:#07070c url('/images/backgrounds/MA.png') center/cover no-repeat fixed;position:relative}
+.bl{min-height:100vh;min-height:100dvh;color:#f6f6f8;font-family:var(--font-main,system-ui,sans-serif);background:#07070c url('/images/backgrounds/MA.png') center/cover; background-size: 697px 1159px;
+    background-repeat: repeat; 
+    background-position: center center; position:relative}
 .bl::before{content:'';position:fixed;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,.42) 38%,rgba(0,0,0,.66))}
 .bl-head,.bl-main{position:relative;z-index:1}
 .bl-head{display:flex;align-items:center;gap:12px;padding:14px 16px;position:sticky;top:0;background:rgba(8,8,10,.55);border-bottom:1px solid rgba(255,26,26,.35);backdrop-filter:blur(18px)}

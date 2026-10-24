@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, Menu, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -9,7 +9,7 @@ const MODULES = [
 ] as const;
 
 export function TopBar({ title, tools }: { title: string; tools?: ReactNode }) {
-  const path = useRouterState({ select: (s) => s.location.pathname });
+  const path = useLocation().pathname;
   const [open, setOpen] = useState(false);
   useEffect(() => {
     setOpen(false);

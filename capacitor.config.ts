@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.rbc.easy',
+  appId: 'com.savitar.rbc',
   appName: 'RBC EASY',
   webDir: 'dist',
   android: {

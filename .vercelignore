@@ -7,3 +7,9 @@ src.zip
 .env*
 *.log
 .desktop-build-*
+
+work
+supabase
+.vscode
+
+

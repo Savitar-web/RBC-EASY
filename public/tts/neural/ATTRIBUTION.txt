@@ -1,0 +1,8 @@
+Piper neural voices
+DaveFX Spanish Spain: CC0 dataset; Ald Mexican Spanish: Unlicense dataset.
+Models: https://huggingface.co/rhasspy/piper-voices
+Browser adapter: @mintplex-labs/piper-tts-web 1.0.5 (MIT), modified for single-thread inference and speech speed.
+ONNX Runtime Web 1.18.0 (MIT). Piper phonemizer: @diffusionstudio/piper-wasm 1.0.0.
+
+Daniela (Argentina, high): trained by larcanio; OpenSLR 61 dataset, CC BY-SA 4.0. https://huggingface.co/rhasspy/piper-voices/blob/main/es/es_AR/daniela/high/MODEL_CARD
+Claude (Mexico, high): Apache-2.0 dataset. https://huggingface.co/rhasspy/piper-voices/blob/main/es/es_MX/claude/high/MODEL_CARD

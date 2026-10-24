@@ -13,12 +13,13 @@ export default defineConfig({
         e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]);
       const files = walk(root).filter(f => !['sw.js', 'offline-assets.json'].includes(path.basename(f)));
       const assets = files.map(f => '/' + path.relative(root, f).split(path.sep).join('/'));
+      const entries = files.map((f,i) => ({url:assets[i],size:fs.statSync(f).size,hash:crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')}));
       const revision = crypto.createHash('sha256');
       for (const file of files) revision.update(fs.readFileSync(file));
       const cache = 'rbc-easy-shell-' + revision.digest('hex').slice(0, 16);
-      fs.writeFileSync(path.join(root, 'offline-assets.json'), JSON.stringify({ cache, assets }));
+      fs.writeFileSync(path.join(root, 'offline-assets.json'), JSON.stringify({ cache, assets, entries }));
       const worker = fs.readFileSync(path.resolve(__dirname, 'public/sw.js'), 'utf8');
-      fs.writeFileSync(path.join(root, 'sw.js'), `self.__OFFLINE = ${JSON.stringify({ cache, assets })};\n` + worker);
+      fs.writeFileSync(path.join(root, 'sw.js'), `self.__OFFLINE = ${JSON.stringify({ cache, assets, entries })};\n` + worker);
     },
   }],
   resolve: {

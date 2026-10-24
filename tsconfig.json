@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -14,12 +18,26 @@
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-"noFallthroughCasesInSwitch": true,
-"paths": {
-  "@/*": ["./src/*"]
-},
-"types": ["vite/client"]
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "types": [
+      "vite/client"
+    ]
   },
-  "include": ["src", "vite.config.ts", "capacitor.config.ts"],
-  "exclude": ["node_modules", "dist", "android", "release", "src/routes", "src/components/chrome.tsx", "src/components/calculadora.tsx"]
+  "include": [
+    "src",
+    "vite.config.ts",
+    "capacitor.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "android",
+    "release",
+    "src/routes"
+  ]
 }

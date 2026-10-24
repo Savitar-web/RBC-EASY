@@ -4,3 +4,5 @@ export async function audioWrite(store:string,value:any){const db=await audioDB(
 export async function audioDelete(store:string,id:string){const db=await audioDB();return new Promise<void>((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(id);tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>reject(tx.error);});}
 const readers=new Set<string>();
 export function readingAudio(source:string,active:boolean){active?readers.add(source):readers.delete(source);window.dispatchEvent(new CustomEvent('rbc-reading',{detail:readers.size>0}));}
+
+export async function audioParts(jobId:string){const db=await audioDB();return new Promise<any[]>((resolve,reject)=>{const tx=db.transaction('parts'),request=tx.objectStore('parts').getAll(IDBKeyRange.bound(jobId+':',jobId+':\uffff'));let rows:any[]=[];request.onsuccess=()=>rows=request.result;tx.oncomplete=()=>{db.close();resolve(rows.sort((a,b)=>a.index-b.index));};tx.onabort=()=>{db.close();reject(tx.error);};});}

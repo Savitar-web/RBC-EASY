@@ -1,16 +1,24 @@
+import DownloadCenter from './components/DownloadCenter';
+import FirstInstall from './pwa/FirstInstall';
+import Administration from './community/Administration';
+import AuthorProfile from './community/AuthorProfile';
+import NeuralReader from './audio/NeuralReader';
+import {AuthProvider,Account} from './community/Auth';
+import {Explore,PublicationPage,Publisher} from './community/Community';
+import './community/community.css';
 import {ReadingNotice} from './components/StudioControls';
-import { Component, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './hooks/useTheme';
 import Home from './pages/Home/Home';
-import Projects from './pages/Projects/Projects';
+const Projects=lazy(()=>import('./pages/Projects/Projects'));
 import Contact from './pages/Contact/Contact';
-import BibliasMaker from './pages/BibliasMaker/BibliasMaker';
-import Writer from './pages/Writer/Writer';
-import Calcular from './pages/Calcular/Calcular';
-import ModoAscendido from './pages/ModoAscendido/ModoAscendido';
-import Conversion from './pages/Conversion/Conversion';
-import Balistica from './pages/Balistica/Balistica';
+const BibliasMaker=lazy(()=>import('./pages/BibliasMaker/BibliasMaker'));
+const Writer=lazy(()=>import('./pages/Writer/Writer'));
+const Calcular=lazy(()=>import('./pages/Calcular/Calcular'));
+const ModoAscendido=lazy(()=>import('./pages/ModoAscendido/ModoAscendido'));
+const Conversion=lazy(()=>import('./pages/Conversion/Conversion'));
+const Balistica=lazy(()=>import('./pages/Balistica/Balistica'));
 import { registerServiceWorker } from './pwa/offline';
 import { isNativeAndroid, nativeShortcuts, promptInstall, onInstallReady, deviceKind, isStandalone } from './pwa/install';
 import layoutCSS from './styles/calculator-layout.css?inline';
@@ -172,14 +180,14 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <ErrorBoundary>
+      <ErrorBoundary><AuthProvider>
         <PageViewport /><PageBackground />
         <DocumentTitle />
         <PlatformAccess />
-        <OfflineBadge /><Ambience /><ReadingNotice/>
+        <DownloadCenter/><FirstInstall/><Publisher/><NeuralReader/><OfflineBadge /><Ambience /><ReadingNotice/>
         <style>{layoutCSS + viewportCSS + comfortCSS}</style>
-        {installing?<div style={{minHeight:'100dvh',background:'var(--ui-field)'}}/>:<Routes>
-          <Route path="/" element={<Home />} />
+        <Suspense fallback={<div role="status" style={{minHeight:'100dvh',display:'grid',placeItems:'center',color:'var(--ui-text)'}}>Abriendo tu espacio…</div>}>{installing?<div style={{minHeight:'100dvh',background:'var(--ui-field)'}}/>:<Routes>
+          <Route path="/administracion" element={<Administration/>}/><Route path="/" element={<Home />} /><Route path="/cuenta" element={<Account/>}/><Route path="/explorar" element={<Explore/>}/><Route path="/perfil/:username" element={<AuthorProfile/>}/><Route path="/publicacion/:id" element={<PublicationPage/>}/>
           <Route path="/proyectos" element={<Projects />} />
           <Route path="/contacto" element={<Contact />} />
           <Route path="/biblias" element={<BibliasMaker />} />
@@ -196,8 +204,8 @@ export default function App() {
           <Route path="/conversor" element={<Navigate to="/conversion" replace />} />
           <Route path="/ascendido" element={<Navigate to="/modo-ascendido" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>}
-      </ErrorBoundary>
+        </Routes>}</Suspense>
+      </AuthProvider></ErrorBoundary>
     </ThemeProvider>
   );
 }

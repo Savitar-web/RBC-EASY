@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!assets/|icons/|images/|dictionaries/|shortcuts/|sw[.]js|manifest[.]|offline-assets[.]json|favicon[.]svg).*)",
+      "source": "/((?!assets/|icons/|images/|audio/|tts/|voice-assets[.]json|dictionaries/|shortcuts/|sw[.]js|manifest[.]|offline-assets[.]json|favicon[.]svg).*)",
       "destination": "/index.html"
     }
   ],

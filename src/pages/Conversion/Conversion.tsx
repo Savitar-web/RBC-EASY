@@ -476,7 +476,9 @@ export default function Conversion() {
 }
 
 const CSS = `
-.cv{min-height:100dvh;color:#f6f6f8;font-family:var(--font-main,system-ui,sans-serif);background:#07070c url('/images/backgrounds/TA.png') center/cover no-repeat fixed;position:relative}
+.cv{min-height:100dvh;color:#f6f6f8;font-family:var(--font-main,system-ui,sans-serif);background:#07070c url('/images/backgrounds/TA.png') center/cover;     background-size: 697px 1159px;
+    background-repeat: repeat; 
+    background-position: center center; position:relative}
 .cv::before{content:'';position:fixed;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.64),rgba(0,0,0,.44) 38%,rgba(0,0,0,.7))}
 .cv-head{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,10,.78);border-bottom:1px solid rgba(255,26,26,.4);backdrop-filter:blur(16px);overflow:visible}
 .cv-main{position:relative;z-index:1}

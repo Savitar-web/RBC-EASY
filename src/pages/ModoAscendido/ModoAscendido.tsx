@@ -1,3 +1,4 @@
+import {saveAs} from '../../components/DownloadCenter';
 /**
  * pages/ModoAscendido/ModoAscendido.tsx
  * Calculadora (ancho de Calcular), gráfica con herramientas reales y matrices por burbujas.
@@ -486,7 +487,7 @@ const VIEW_INFO: Record<View,{name:string;subtitle:string;guide:string;example:s
   funciones:{name:'Análisis de funciones',subtitle:'Derivadas, integrales y aproximaciones numéricas.',guide:'Las funciones de cálculo usan radianes. La derivada describe cambio instantáneo y la integral definida representa área con signo. Los métodos numéricos dan aproximaciones: comprueba continuidad, dominio e intervalo. En bisección, los extremos deben encerrar un cambio de signo; una integral indefinida incluye la constante C.',example:'Derivar 3x^2 + sin(x) · integrar x^2 · ceros de x^2 - 2'},
 };
 function downloadData(name:string,body:string,type='text/plain;charset=utf-8') {
-  const href=URL.createObjectURL(new Blob([body],{type}));const a=document.createElement('a');a.href=href;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(href),1000);
+  void saveAs(new Blob([body],{type}),name).catch(()=>{});
 }
 async function copyValue(text:string,onStatus:(value:string)=>void) {try{await navigator.clipboard.writeText(text);onStatus('Copiado al portapapeles.');}catch{onStatus('No se pudo copiar. Puedes seleccionar el texto o descargarlo.');}}
 export default function ModoAscendido() {
@@ -1196,7 +1197,7 @@ function GraphStudio({ deg }: { deg: boolean }) {
           <button type="button" onClick={()=>setFullscreen(!fullscreen)}>{fullscreen?'Salir de pantalla completa':'Pantalla completa'}</button>
           <button type="button" aria-label="Acercar gráfica" onClick={()=>zoom(.8)}>+</button><button type="button" aria-label="Alejar gráfica" onClick={()=>zoom(1.25)}>−</button>
           <button type="button" onClick={()=>{fitView();setNote('Vista centrada. Las construcciones se conservan.');}}>Centrar plano</button>
-          <button type="button" onClick={()=>{try{const image=canvas.current?.toDataURL('image/png');if(!image)return;const anchor=document.createElement('a');anchor.href=image;anchor.download='RBC-grafica.png';anchor.click();setNote('Gráfica exportada como PNG.');}catch{setNote('La imagen contiene recursos que no permiten exportar.');}}}>Exportar PNG</button>
+          <button type="button" onClick={()=>{try{const image=canvas.current?.toDataURL('image/png');if(!image)return;canvas.current!.toBlob(blob=>{if(blob)void saveAs(blob,'RBC-grafica.png').catch(e=>setNote(String(e)));},'image/png');setNote('Gráfica exportada como PNG.');}catch{setNote('La imagen contiene recursos que no permiten exportar.');}}}>Exportar PNG</button>
         </div>
         <p className="tool-note">{toolName}. {note}</p>
         {needsExtra && <label className="extra">Valor<input value={extra} onChange={(e) => setExtra(e.target.value)} /></label>}

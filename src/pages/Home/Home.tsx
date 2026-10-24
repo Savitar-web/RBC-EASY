@@ -165,7 +165,7 @@ export default function Home() {
           <h1>RBC-EASY</h1>
           <div className="author">Autor · Savitar</div>
 
-          <button className="start-button" onClick={() => navigate('/proyectos')}>
+          <button className="start-button" onClick={() => navigate('/cuenta')}>
             Empezar
           </button>
 

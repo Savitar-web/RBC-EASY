@@ -1,3 +1,7 @@
+import {saveAs} from '../../components/DownloadCenter';
+import SaveLibraryDialog from '../../components/SaveLibraryDialog';
+import {roleHtml,roleCSS,localFigures} from '../../lib/roleFormat';
+import {importRolePDF,exportRolePDF} from '../../lib/pdfRole';
 import ReaderControls from '../../audio/ReaderControls';
 import PaperPicker from '../../components/PaperPicker';
 import AudioExport from '../../audio/AudioExport';
@@ -346,7 +350,7 @@ export default function BibliasMaker() {
 
   const stopVoice = useCallback(() => {
     readingGeneration.current++;
-    try { speechSynthesis.cancel(); } catch { /* */ }
+    try { window.speechSynthesis?.cancel(); } catch { /* */ }
     if (progressTimer.current) {
       clearInterval(progressTimer.current);
       progressTimer.current = null;
@@ -361,88 +365,10 @@ export default function BibliasMaker() {
     }
   }, []);
 
-  const startVoice = useCallback((onlySelection = false, offset = 0, nextRate = speechRate, nextVoice = selectedVoice) => {
-    const source = offset > 0 && readingSource.current ? readingSource.current : onlySelection && selection?.text ? selection.text : text;
-      readingSource.current=source; readingSelection.current=onlySelection;
-      offset=Math.max(0,Math.min(source.length-1,offset));
-      // Seek to a word boundary so a jump never begins halfway through a word.
-      while(offset>0 && /\S/.test(source[offset-1]))offset--;
-      readingPosition.current=offset;
-      const generation=++readingGeneration.current;
-    if (!source.trim()) {
-      window.dispatchEvent(new Event('rbc-empty-reading'));
-      return;
-    }
-    try { speechSynthesis.cancel(); } catch { /* */ }
-    if (progressTimer.current) {
-      clearInterval(progressTimer.current);
-      progressTimer.current = null;
-    }
-
-    let boundarySeen=false;
-    const utterance = new SpeechSynthesisUtterance(source.slice(offset));
-    utterance.lang = 'es-ES';
-    utterance.rate = Math.min(2, Math.max(0.5, nextRate));
-    utterance.pitch = 1;
-    utterance.volume = 1;
-    const v = voices.find((x) => x.name === nextVoice);
-    if (v) utterance.voice = v.voice;
-
-    const estimate = Math.max(1, (source.length / 14) * (1 / nextRate));
-    setElapsed(estimate*offset/source.length);
-    setRemaining(estimate*(1-offset/source.length));
-    setProgress(offset/source.length*100);
-    speakStart.current = Date.now();
-    setSelectionOnly(onlySelection);
-
-    utterance.onboundary = e => {if(generation===readingGeneration.current){boundarySeen=true;readingPosition.current=offset+e.charIndex;setProgress(readingPosition.current/source.length*100);}};
-      utterance.onend = () => {
-        if(generation!==readingGeneration.current)return;
-      setIsSpeaking(false);
-      setProgress(100);
-      setElapsed(estimate);
-      setRemaining(0);
-      if (progressTimer.current) {
-        clearInterval(progressTimer.current);
-        progressTimer.current = null;
-      }
-      releaseWakeLock();
-      if ('mediaSession' in navigator) {
-        try { navigator.mediaSession.playbackState = 'none'; } catch { /* */ }
-      }
-    };
-    utterance.onerror = () => {if(generation===readingGeneration.current)stopVoice();};
-
-    progressTimer.current = window.setInterval(() => {
-      if(generation!==readingGeneration.current)return;
-      const el = (Date.now() - speakStart.current) / 1000 + estimate*offset/source.length;
-      if(!boundarySeen)readingPosition.current=Math.min(source.length-1,Math.floor(el/estimate*source.length));
-      setProgress(Math.min(99, boundarySeen?readingPosition.current/source.length*100:(el/estimate)*100));
-      setElapsed(el);
-      setRemaining(Math.max(0, estimate - el));
-    }, 200);
-
-    if ('mediaSession' in navigator) {
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: hojas.find((h) => h.id === activeHojaId)?.name || 'Biblias Maker',
-          artist: 'RBC-EASY',
-          album: onlySelection ? 'Selección' : 'Lectura completa',
-        });
-        navigator.mediaSession.playbackState = 'playing';
-      } catch { /* */ }
-    }
-
-    requestWakeLock();
-    try {
-      if (speechSynthesis.paused) speechSynthesis.resume();
-    } catch { /* */ }
-    speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-    setShowVoiceBar(true);
-    setShowSelBar(false);
-    playClick();
-  }, [text, selection, speechRate, selectedVoice, voices, activeHojaId, hojas, stopVoice]);
+  const startVoice = useCallback((onlySelection=false, _offset=0, _rate=speechRate, _voice=selectedVoice)=>{
+    stopVoice();setShowVoiceBar(false);
+    window.dispatchEvent(new CustomEvent('rbc-read',{detail:{text:onlySelection&&selection?.text?selection.text:text}}));
+  },[text,selection,speechRate,selectedVoice,stopVoice]);
 
   startVoiceRef.current = startVoice;
   stopVoiceRef.current = stopVoice;
@@ -486,9 +412,7 @@ export default function BibliasMaker() {
       const name = localStorage.getItem('currentFileName') || 'Importada';
       const mime = localStorage.getItem('currentFileMime') || '';
       let content = imported;
-      if (mime.includes('pdf') || name.toLowerCase().endsWith('.pdf')) {
-        content = `[PDF] ${name}\n\n(Extracción automática de PDF no disponible. Usa TXT o pega el texto.)`;
-      } else if (imported.startsWith('data:')) {
+      if (imported.startsWith('data:')) {
         try {
           const b64 = imported.split(',')[1] || '';
           const bin = atob(b64);
@@ -515,8 +439,7 @@ export default function BibliasMaker() {
     }
 
     const loadVoices = () => {
-      const list = speechSynthesis
-        .getVoices()
+      const list = (window.speechSynthesis?.getVoices?.() || [])
         .sort((a,b)=>Number(b.lang.startsWith('es'))-Number(a.lang.startsWith('es'))||Number(/Microsoft/i.test(b.name))-Number(/Microsoft/i.test(a.name)))
         .filter((v) => v.lang.startsWith('es') || v.lang.startsWith('en') || v.lang.startsWith('pt'))
         .map((v) => ({ name: v.name, lang: v.lang, voice: v }));
@@ -529,7 +452,7 @@ export default function BibliasMaker() {
       });
     };
     loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
+    if(window.speechSynthesis) window.speechSynthesis.onvoiceschanged = loadVoices;
     setTimeout(loadVoices, 300);
     setTimeout(loadVoices, 1000);
 
@@ -555,7 +478,7 @@ export default function BibliasMaker() {
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
       if (progressTimer.current) clearInterval(progressTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -678,46 +601,7 @@ export default function BibliasMaker() {
   };
 
   /* ===================== PREVIEW HTML ===================== */
-  const buildPreviewHtml = (content: string) => {
-    let html = content
-      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
-      .replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
-      .replace(/_([^_\n]+)_/g, '<i>$1</i>')
-      .replace(/~~([^~\n]+)~~/g, '<s>$1</s>')
-      .replace(/~([^~\n]+)~/g, '<s>$1</s>')
-      .replace(/__([^_\n]+)__/g, '<u>$1</u>')
-      .replace(/```([^`]+)```/g, '<code class="wa-code">$1</code>')
-      .replace(/`([^`\n]+)`/g, '<code class="wa-code">$1</code>')
-      .replace(/^> (.*)$/gm, '<div class="wa-quote">$1</div>');
-
-    html = html
-      .split('\n')
-      .map((line) => {
-        const m = line.match(/^\[([BUISC]+)\]/i);
-        if (!m) return line;
-        const codes = m[1].toUpperCase();
-        let open = '';
-        let close = '';
-        if (codes.includes('B')) { open += '<b>'; close = '</b>' + close; }
-        if (codes.includes('I')) { open += '<i>'; close = '</i>' + close; }
-        if (codes.includes('U')) { open += '<u>'; close = '</u>' + close; }
-        if (codes.includes('S')) { open += '<s>'; close = '</s>' + close; }
-        if (codes.includes('C')) {
-          open = '<div style="text-align:center">' + open;
-          close = close + '</div>';
-        }
-        return open + line.slice(m[0].length) + close;
-      })
-      .join('<br/>');
-
-    figures.forEach((fig) => {
-      const media = fig.isVideo
-        ? `<video controls style="max-width:100%;border-radius:8px;margin:12px 0"><source src="${fig.src}"></video>`
-        : `<img src="${fig.src}" style="max-width:100%;height:auto;border-radius:8px;margin:12px 0;display:block" alt="" />`;
-      html = html.split(fig.tag).join(`<div class="preview-figure" style="text-align:center">${media}</div>`);
-    });
-    return html;
-  };
+  const buildPreviewHtml=(content:string)=>roleHtml(content,figures);
 
   /* ===================== PDF REAL (iframe + print + fallback HTML) ===================== */
   const generatePdfDocument = () => {
@@ -757,49 +641,7 @@ export default function BibliasMaker() {
 </html>`;
   };
 
-  const exportAsPdf = async () => {
-    const html = generatePdfDocument();
-    const fileName = (hojas.find((h) => h.id === activeHojaId)?.name || 'biblia') + '.pdf';
-
-    // 1) Intento con iframe oculto + print (usuario elige "Guardar como PDF")
-    try {
-      const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
-      document.body.appendChild(iframe);
-      const doc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (doc) {
-        doc.open();
-        doc.write(html);
-        doc.close();
-        // Esperar a que carguen las imágenes base64
-        await new Promise((r) => setTimeout(r, 600));
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          try { document.body.removeChild(iframe); } catch { /* */ }
-        }, 2000);
-        showNotif('Elige "Guardar como PDF" en el diálogo de impresión');
-        return true;
-      }
-    } catch { /* */ }
-
-    // 2) Fallback: descargar HTML imprimible
-    try {
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName.replace(/\.pdf$/i, '') + '_imprimible.html';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(a.href);
-      showNotif('Descargado HTML. Ábrelo y usa Ctrl+P → Guardar como PDF');
-      return true;
-    } catch {
-      showNotif('No se pudo generar el documento');
-      return false;
-    }
-  };
+  const exportAsPdf=async()=>{try{const title=hojas.find(h=>h.id===activeHojaId)?.name||'Biblia';let content=text;const list=comments.filter(c=>c.hojaId===activeHojaId);if(list.length)content+='\n\n--- COMENTARIOS ---\n'+list.map(c=>`> ${c.type==='selection'?'Selección: '+c.selectedText:'Párrafo '+((c.paragraphIndex||0)+1)} — ${c.text}`).join('\n');await exportRolePDF(title,content,figures);showNotif('PDF preparado con comentarios y figuras');return true;}catch(e){showNotif('No se pudo exportar: '+String(e));return false;}};
 
   /* ===================== SELECCIÓN ===================== */
   const updateSelection = () => {
@@ -910,13 +752,7 @@ export default function BibliasMaker() {
       if (exportFormat === 'txt') {
         setExportProgress(50);
         const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = (hojas.find((h) => h.id === activeHojaId)?.name || 'biblia') + '.txt';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
+        await saveAs(blob,(hojas.find(h=>h.id===activeHojaId)?.name||'biblia')+'.txt');
         setExportProgress(100);
       }
 
@@ -997,7 +833,7 @@ export default function BibliasMaker() {
   /* ===================== RENDER ===================== */
   return (
     <div className="bm-page">
-      <style>{`
+      <style>{roleCSS}</style><style>{`
         *{box-sizing:border-box}
         .bm-page{margin:0;padding:0;height:100vh;height:100dvh;overflow:hidden;background-color:var(--bg-primary,#111);background-image:url('/images/backgrounds/FT.png');background-size:cover;background-position:center;background-blend-mode:overlay;font-family:'Lora',serif;color:var(--accent,#ff0000);display:flex;flex-direction:column;user-select:none}
         .particles{position:fixed;inset:0;background:radial-gradient(circle,rgba(255,255,255,.1) 1px,transparent 1px);background-size:5px 5px;z-index:-1;pointer-events:none}
@@ -1196,7 +1032,7 @@ export default function BibliasMaker() {
           <button onClick={() => { setShowActions(true); setShowOptions(false); }}>📋 Marcos</button>
           <button onClick={() => { setShowCommentsPanel(true); setShowOptions(false); }}>💬 Comentarios</button>
           <button onClick={() => { setShowBibleCreator(true); setShowOptions(false); }}>📚 Crear Biblias</button>
-          <button onClick={() => { setShowExport(true); setShowOptions(false); }}>⬇️ Exportar Biblia</button>
+          <button onClick={()=>{setShowOptions(false);window.dispatchEvent(new CustomEvent('rbc-publish',{detail:{title:hojas.find(h=>h.id===activeHojaId)?.name||'Mi rol',nodes:[{id:activeHojaId,name:hojas.find(h=>h.id===activeHojaId)?.name||'Hoja',type:'file',parentId:null,content:text,order:0}]}}));}}>↗ Publicar esta hoja</button><button onClick={() => { setShowExport(true); setShowOptions(false); }}>⬇️ Exportar Biblia</button>
           <button onClick={() => { setShowSaveToProjects(true); setSaveAfterExport(false); setShowOptions(false); }}>💾 Guardar en Mis Biblias</button>
           <button onClick={() => { navigator.clipboard.writeText(text); showNotif('Copiado'); setShowOptions(false); }}>📋 Copiar Todo</button>
           <button onClick={() => { setAskPrefixes(!askPrefixes); showNotif(askPrefixes ? 'Prefijos OFF' : 'Prefijos ON'); }}>
@@ -1334,22 +1170,7 @@ export default function BibliasMaker() {
         </div>
       )}
 
-      {showSaveToProjects && (
-        <div className="modal-backdrop">
-          <div className="modal">
-            <h3>{saveAfterExport ? '¿Guardar en Mis Biblias?' : 'Guardar en Mis Biblias'}</h3>
-            <p style={{ fontSize: 13, color: '#aaa', textAlign: 'center', marginBottom: 12 }}>
-              {hojas.length > 1
-                ? `Se guardarán ${hojas.length} biblias (una por hoja), con comentarios.`
-                : 'Se guardará la hoja actual con sus comentarios.'}
-            </p>
-            <button className="full" onClick={saveAllHojasToProjects}>Sí, guardar</button>
-            <button className="full cancel" onClick={() => setShowSaveToProjects(false)}>
-              {saveAfterExport ? 'No, solo exporté' : 'Cancelar'}
-            </button>
-          </div>
-        </div>
-      )}
+      {showSaveToProjects&&<SaveLibraryDialog current={activeHojaId} sheets={hojas.map(h=>{const list=comments.filter(c=>c.hojaId===h.id);let content=h.id===activeHojaId?text:h.content;if(list.length)content+='\n\n--- COMENTARIOS ---\n'+list.map(c=>`> ${c.type==='selection'?'Selección: '+c.selectedText:'Párrafo '+((c.paragraphIndex||0)+1)} — ${c.text}`).join('\n');return {...h,content};})} close={()=>setShowSaveToProjects(false)} saved={()=>showNotif('Hojas guardadas en Mis Biblias')}/>}
 
       {showMediaPanel && (
         <div className="modal-backdrop" onClick={() => setShowMediaPanel(false)}>
@@ -1470,12 +1291,12 @@ export default function BibliasMaker() {
               onClick={() => {
                 const input = document.createElement('input');
                 input.type = 'file';
-                input.accept = '.txt,.md,text/plain';
-                input.onchange = (ev) => {
+                input.accept = '.txt,.md,.pdf,text/plain,application/pdf';
+                input.onchange = async (ev) => {
                   const f = (ev.target as HTMLInputElement).files?.[0];
                   if (!f) return;
                   if (f.name.toLowerCase().endsWith('.pdf')) {
-                    createHoja(f.name.replace(/\.[^/.]+$/, ''), `[PDF] ${f.name}\n\nUsa TXT o pega el texto.`);
+                    try{const content=await importRolePDF(f,showNotif);setFigures(localFigures() as Figure[]);createHoja(f.name.replace(/\.[^/.]+$/, ''),content);}catch(e){showNotif(String(e));}
                     setShowImportModal(false);
                     return;
                   }

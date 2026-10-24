@@ -1,5 +1,9 @@
-const { app, BrowserWindow, protocol, net, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, protocol, net, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
+const {randomUUID}=require('crypto');
+const saves=new Map();
+function trusted(event){const url=new URL(event.senderFrame.url);if(url.protocol!=='app:'||url.host!=='local')throw Error('Origen no permitido');}
+async function cancelSave(id){const state=saves.get(id);if(!state)return;saves.delete(id);await state.handle.close().catch(()=>{});await fs.promises.unlink(state.temp).catch(()=>{});}
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 
@@ -124,6 +128,19 @@ else app.whenReady().then(() => {
     if (!file) return new Response('No encontrado', { status: 404 });
     return net.fetch(pathToFileURL(file).toString());
   });
+
+  ipcMain.handle('rbc:save-begin',async(event,payload)=>{
+    trusted(event);if([...saves.values()].some(s=>s.owner===event.sender.id))throw Error('Termina el guardado anterior primero.');
+    if(!Number.isSafeInteger(payload?.size)||payload.size<=0||payload.size>2147483648)throw Error('Tamaño de archivo no compatible.');
+    const name=String(payload.name||'RBC-archivo').replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,180);
+    const result=await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender),{title:'Guardar archivo RBC EASY',defaultPath:path.join(app.getPath('downloads'),name),properties:['showOverwriteConfirmation','createDirectory']});
+    if(result.canceled||!result.filePath)return{canceled:true};const id=randomUUID(),temp=result.filePath+'.rbc-'+id+'.tmp',handle=await fs.promises.open(temp,'wx');saves.set(id,{handle,temp,target:result.filePath,size:payload.size,written:0,owner:event.sender.id});return{id};
+  });
+  const owned=(event,id)=>{trusted(event);const s=saves.get(id);if(!s||s.owner!==event.sender.id)throw Error('Guardado no válido.');return s;};
+  ipcMain.handle('rbc:save-chunk',async(event,payload)=>{const s=owned(event,payload?.id),bytes=Buffer.from(payload.bytes);if(!bytes.length||bytes.length>262144||s.written+bytes.length>s.size)throw Error('Fragmento de archivo no válido.');let offset=0;while(offset<bytes.length){const result=await s.handle.write(bytes,offset,bytes.length-offset);if(!result.bytesWritten)throw Error('No se pudo escribir el archivo.');offset+=result.bytesWritten;}s.written+=bytes.length;});
+  ipcMain.handle('rbc:save-finish',async(event,payload)=>{const s=owned(event,payload?.id);if(s.written!==s.size)throw Error('El archivo no está completo.');await s.handle.sync();await s.handle.close();await fs.promises.rename(s.temp,s.target);saves.delete(payload.id);return{ok:true};});
+  ipcMain.handle('rbc:save-cancel',async(event,payload)=>{owned(event,payload?.id);await cancelSave(payload.id);});
+  app.on('web-contents-created',(_event,contents)=>contents.once('destroyed',()=>{for(const [id,s]of saves)if(s.owner===contents.id)void cancelSave(id);}));
 
   ipcMain.handle('create-shortcut', (_event, payload) => {
     try {

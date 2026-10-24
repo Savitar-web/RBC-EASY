@@ -1,3 +1,4 @@
+import {roleHtml,roleCSS,localFigures} from '../../lib/roleFormat';
 import ReaderControls from '../../audio/ReaderControls';
 import PaperPicker from '../../components/PaperPicker';
 import { readingAudio } from '../../audio/storage';
@@ -289,14 +290,13 @@ export default function Writer() {
     } catch { /* */ }
 
     const loadVoices = () => {
-      const list = speechSynthesis
-        .getVoices()
+      const list = (window.speechSynthesis?.getVoices?.() || [])
         .sort((a,b)=>Number(b.lang.startsWith('es'))-Number(a.lang.startsWith('es'))||Number(/Microsoft/i.test(b.name))-Number(/Microsoft/i.test(a.name)))
         .filter((v) => v.lang.startsWith('es') || v.lang.startsWith('en'));
       setVoices(list);
     };
     loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
+    if(window.speechSynthesis) window.speechSynthesis.onvoiceschanged = loadVoices;
     setTimeout(loadVoices, 400);
 
     const onKey = (e: KeyboardEvent) => {
@@ -317,7 +317,7 @@ export default function Writer() {
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
       if (progressTimer.current) clearInterval(progressTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -377,7 +377,7 @@ export default function Writer() {
 
   /* ---------- Salir → BibliasMaker con todas las hojas ---------- */
   const exitToBiblias = () => {
-    speechSynthesis.cancel();
+    window.speechSynthesis?.cancel();
     const synced = hojas.map((h) =>
       h.id === activeHojaId ? { ...h, content: text } : h
     );
@@ -397,7 +397,7 @@ export default function Writer() {
   /* ---------- Voz ---------- */
   const stopVoice = useCallback(() => {
     readingGeneration.current++;
-    try { speechSynthesis.cancel(); } catch { /* */ }
+    try { window.speechSynthesis?.cancel(); } catch { /* */ }
     if (progressTimer.current) {
       clearInterval(progressTimer.current);
       progressTimer.current = null;
@@ -408,64 +408,10 @@ export default function Writer() {
     setRemaining(0);
   }, []);
 
-  const startVoice = useCallback(
-    (onlySelection = false, offset = 0, nextRate = speechRate, nextVoice = selectedVoice) => {
-      const source = offset > 0 && readingSource.current ? readingSource.current : onlySelection && selection?.text ? selection.text : text;
-      readingSource.current=source; readingSelection.current=onlySelection;
-      offset=Math.max(0,Math.min(source.length-1,offset));
-      // Seek to a word boundary so a jump never begins halfway through a word.
-      while(offset>0 && /\S/.test(source[offset-1]))offset--;
-      readingPosition.current=offset;
-      const generation=++readingGeneration.current;
-      if (!source.trim()) {
-        window.dispatchEvent(new Event('rbc-empty-reading'));
-        return;
-      }
-      try { speechSynthesis.cancel(); } catch { /* */ }
-      if (progressTimer.current) clearInterval(progressTimer.current);
-
-      let boundarySeen=false;
-    const utterance = new SpeechSynthesisUtterance(source.slice(offset));
-      utterance.lang = 'es-ES';
-      utterance.rate = nextRate;
-      if (voices[nextVoice]) utterance.voice = voices[nextVoice];
-
-      const estimate = Math.max(1, (source.length / 14) * (1 / nextRate));
-      setElapsed(estimate*offset/source.length);
-      setRemaining(estimate*(1-offset/source.length));
-      setProgress(offset/source.length*100);
-      speakStart.current = Date.now();
-
-      utterance.onboundary = e => {if(generation===readingGeneration.current){boundarySeen=true;readingPosition.current=offset+e.charIndex;setProgress(readingPosition.current/source.length*100);}};
-      utterance.onend = () => {
-        if(generation!==readingGeneration.current)return;
-        setIsSpeaking(false);
-        setProgress(100);
-        setElapsed(estimate);
-        setRemaining(0);
-        if (progressTimer.current) clearInterval(progressTimer.current);
-      };
-      utterance.onerror = () => {if(generation===readingGeneration.current)stopVoice();};
-
-      progressTimer.current = window.setInterval(() => {
-        if(generation!==readingGeneration.current)return;
-      const el = (Date.now() - speakStart.current) / 1000 + estimate*offset/source.length;
-      if(!boundarySeen)readingPosition.current=Math.min(source.length-1,Math.floor(el/estimate*source.length));
-        setProgress(Math.min(99, boundarySeen?readingPosition.current/source.length*100:(el/estimate)*100));
-        setElapsed(el);
-        setRemaining(Math.max(0, estimate - el));
-      }, 200);
-
-      try {
-        if (speechSynthesis.paused) speechSynthesis.resume();
-      } catch { /* */ }
-      speechSynthesis.speak(utterance);
-      setIsSpeaking(true);
-      setShowVoiceBar(true);
-      setShowSelBar(false);
-    },
-    [text, selection, speechRate, selectedVoice, voices, stopVoice]
-  );
+  const startVoice = useCallback((onlySelection=false, _offset=0, _rate=speechRate, _voice=selectedVoice)=>{
+    stopVoice();setShowVoiceBar(false);
+    window.dispatchEvent(new CustomEvent('rbc-read',{detail:{text:onlySelection&&selection?.text?selection.text:text}}));
+  },[text,selection,speechRate,selectedVoice,stopVoice]);
 
   const toggleVoice = () => {
     if (isSpeaking) stopVoice();
@@ -473,52 +419,7 @@ export default function Writer() {
   };
 
   /* ---------- Preview ---------- */
-  const buildPreviewHtml = (content: string) => {
-    let html = content
-      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
-      .replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
-      .replace(/_([^_\n]+)_/g, '<i>$1</i>')
-      .replace(/~~([^~\n]+)~~/g, '<s>$1</s>')
-      .replace(/~([^~\n]+)~/g, '<s>$1</s>')
-      .replace(/__([^_\n]+)__/g, '<u>$1</u>')
-      .replace(/```([^`]+)```/g, '<code class="pv-code">$1</code>')
-      .replace(/`([^`\n]+)`/g, '<code class="pv-code">$1</code>')
-      .replace(/^> (.*)$/gm, '<div class="pv-quote">$1</div>');
-
-    html = html
-      .split('\n')
-      .map((line) => {
-        const m = line.match(/^\[([BUISC]+)\]/i);
-        if (!m) return line;
-        const codes = m[1].toUpperCase();
-        let open = '';
-        let close = '';
-        if (codes.includes('B')) { open += '<b>'; close = '</b>' + close; }
-        if (codes.includes('I')) { open += '<i>'; close = '</i>' + close; }
-        if (codes.includes('U')) { open += '<u>'; close = '</u>' + close; }
-        if (codes.includes('S')) { open += '<s>'; close = '</s>' + close; }
-        if (codes.includes('C')) {
-          open = '<div style="text-align:center">' + open;
-          close = close + '</div>';
-        }
-        return open + line.slice(m[0].length) + close;
-      })
-      .join('<br/>');
-
-    try {
-      const figs: Array<{ tag: string; src: string; isVideo?: boolean }> = JSON.parse(
-        localStorage.getItem(FIGURES_KEY) || '[]'
-      );
-      figs.forEach((fig) => {
-        const media = fig.isVideo
-          ? `<video controls style="max-width:100%;border-radius:8px"><source src="${fig.src}"></video>`
-          : `<img src="${fig.src}" style="max-width:100%;border-radius:8px" alt="" />`;
-        html = html.split(fig.tag).join(`<div style="text-align:center;margin:12px 0">${media}</div>`);
-      });
-    } catch { /* */ }
-
-    return html;
-  };
+  const buildPreviewHtml=(content:string)=>roleHtml(content,localFigures());
 
   /* ---------- Selección ---------- */
   const updateSelection = () => {
@@ -641,7 +542,7 @@ export default function Writer() {
 
   return (
     <div className="writer-page">
-      <style>{`
+      <style>{roleCSS}</style><style>{`
         * { box-sizing: border-box; }
         .writer-page {
           margin: 0;
@@ -1073,7 +974,7 @@ export default function Writer() {
           >
             📋 Copiar
           </button>
-          <button onClick={() => { startVoice(false); setShowOptions(false); }}>▶ Leer todo</button>
+          <button onClick={()=>{setShowOptions(false);window.dispatchEvent(new CustomEvent('rbc-publish',{detail:{title:hojas.find(h=>h.id===activeHojaId)?.name||'Mi rol',nodes:[{id:activeHojaId,name:hojas.find(h=>h.id===activeHojaId)?.name||'Hoja',type:'file',parentId:null,content:text,order:0}]}}));}}>↗ Publicar esta hoja</button><button onClick={() => { startVoice(false); setShowOptions(false); }}>▶ Leer todo</button>
           <button
             onClick={() => {
               navigate('/calcular');
