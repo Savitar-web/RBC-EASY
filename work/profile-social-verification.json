@@ -1,9 +1,0 @@
-{
-  "applied": true,
-  "verified_date": "2026-10-24",
-  "migration": "202610240002_profile_social.sql",
-  "transactional_tests": "PASS",
-  "test_data_rolled_back": true,
-  "anonymous_write_denied": true,
-  "avatar_relation_valid": true
-}

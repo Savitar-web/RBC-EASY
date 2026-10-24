@@ -18,6 +18,7 @@ android/capacitor.settings.gradle
 .env*
 .desktop-build-*
 
+work/
 work/native-test-profile-*/
 # Private release credentials
 android/signing.properties
