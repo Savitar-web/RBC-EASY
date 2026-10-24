@@ -17,3 +17,5 @@ android/app/capacitor.build.gradle
 android/capacitor.settings.gradle
 .env*
 .desktop-build-*
+
+work/native-test-profile-*/
