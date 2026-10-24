@@ -1,0 +1,33 @@
+begin;
+do $$ declare a uuid;b uuid;visitor uuid:=gen_random_uuid();root_id uuid;reply_id uuid;before_count bigint;after_count bigint;blocked boolean:=false;begin
+select id into a from public.profiles order by created_at limit 1;
+if a is null then raise exception 'No hay un perfil para verificar';end if;
+select p.id into b from public.profiles p where p.id<>a and not exists(select 1 from rbc_private.administrators x where x.user_id=p.id) limit 1;
+if has_table_privilege('anon','public.profile_comments','insert') or has_table_privilege('authenticated','public.profile_comments','insert') or has_table_privilege('anon','rbc_private.profile_views','select') then raise exception 'Permisos directos excesivos';end if;
+if exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relname in ('profile_comments','profile_stats','profile_views') and n.nspname in ('public','rbc_private') and not c.relrowsecurity) then raise exception 'Falta RLS';end if;
+perform set_config('request.jwt.claim.sub','',true);
+before_count:=(public.rbc_profile_stats(a,null)->>'views')::bigint;
+after_count:=(public.rbc_profile_stats(a,visitor)->>'views')::bigint;
+if after_count<>before_count+1 then raise exception 'No se conto la visita';end if;
+after_count:=(public.rbc_profile_stats(a,visitor)->>'views')::bigint;
+if after_count<>before_count+1 then raise exception 'Visita duplicada';end if;
+perform set_config('request.jwt.claim.sub',a::text,true);
+after_count:=(public.rbc_profile_stats(a,gen_random_uuid())->>'views')::bigint;
+if after_count<>before_count+1 then raise exception 'Se conto la visita propia';end if;
+root_id:=public.rbc_add_profile_comment(a,'Prueba transaccional; no se conserva',null);
+if not exists(select 1 from public.profile_comments where id=root_id and user_id=a) then raise exception 'Fallo al crear comentario';end if;
+begin perform public.rbc_add_profile_comment(a,'Prueba del limite',null);exception when raise_exception then if SQLERRM like 'Espera un momento%' then blocked:=true;else raise;end if;end;
+if not blocked then raise exception 'Fallo el limite contra spam';end if;
+if b is not null then
+perform set_config('request.jwt.claim.sub',b::text,true);
+reply_id:=public.rbc_add_profile_comment(a,'Respuesta de prueba; no se conserva',root_id);
+if not exists(select 1 from public.profile_comments where id=reply_id and parent_id=root_id and user_id=b) then raise exception 'Fallo al responder';end if;
+blocked:=false;begin perform public.rbc_delete_profile_comment(root_id);exception when raise_exception then if SQLERRM like 'Sin permiso%' then blocked:=true;else raise;end if;end;
+if not blocked then raise exception 'Un visitante elimino un comentario ajeno';end if;
+end if;
+perform set_config('request.jwt.claim.sub',a::text,true);
+perform public.rbc_delete_profile_comment(root_id);
+if not exists(select 1 from public.profile_comments where id=root_id and deleted and body='') then raise exception 'Fallo al eliminar comentario propio';end if;
+end $$;
+rollback;
+select 'PASS: visitas deduplicadas, privacidad, comentarios, respuestas, permisos y antispam. Datos de prueba revertidos.' as verificacion;

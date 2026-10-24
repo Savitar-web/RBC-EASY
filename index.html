@@ -17,12 +17,12 @@
     <script>
       (() => {
         const params = new URLSearchParams(location.search);
-        const routes = ['inicio','proyectos','biblias','writer','calcular','balistica','conversion','modo-ascendido','contacto'];
+        const routes = ['inicio','proyectos','biblias','writer','calcular','balistica','conversion','modo-ascendido','contacto','cuenta','explorar'];
         const key = params.has('web') ? (location.pathname.slice(1).toLowerCase() || 'inicio') : params.has('install') ? (location.pathname.slice(1).toLowerCase() || 'inicio') : params.get('app');
         if(params.has('web')){document.querySelector('meta[name="apple-mobile-web-app-capable"]').content='no';document.querySelector('meta[name="mobile-web-app-capable"]').content='no';}
         if (routes.includes(key)) {
           document.getElementById('app-manifest').href = '/shortcuts/' + (params.has('web')?'web-':'') + key + '.webmanifest';
-          const names = {inicio:'RBC EASY', proyectos:'Proyectos', biblias:'Biblias Maker', writer:'Escritor', calcular:'Calculadora', balistica:'Balística', conversion:'Conversión', 'modo-ascendido':'Modo ascendido', contacto:'Contacto'};
+          const names = {inicio:'RBC EASY', proyectos:'Proyectos', biblias:'Biblias Maker', writer:'Escritor', calcular:'Calculadora', balistica:'Balística', conversion:'Conversión', 'modo-ascendido':'Modo ascendido', contacto:'Contacto',cuenta:'Cuenta',explorar:'Explorar'};
           document.querySelector('meta[name="apple-mobile-web-app-title"]').content = names[key];
           document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', '/icons/pwa/icon-180x180.png');
         }

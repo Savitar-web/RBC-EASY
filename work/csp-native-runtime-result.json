@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "cache": true,
+  "relativeCache": false,
+  "worker": {
+    "bytes": 181804,
+    "mime": "audio/wav",
+    "pcm": 1,
+    "bits": 16,
+    "duration": 4.121541950113379
+  }
+}

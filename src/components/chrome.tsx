@@ -18,7 +18,7 @@ export function TopBar({ title, tools }: { title: string; tools?: ReactNode }) {
   return (
     <header className="topbar">
       {path !== "/" ? (
-        <Link to="/" className="icon-btn" aria-label="Volver a la calculadora">
+        <Link to="/calcular" className="icon-btn" aria-label="Volver a la calculadora">
           <ArrowLeft size={18} />
         </Link>
       ) : (
@@ -35,7 +35,7 @@ export function TopBar({ title, tools }: { title: string; tools?: ReactNode }) {
         </button>
         {open ? (
           <div className="menu" role="menu">
-            <Link to="/" data-active={path === "/" ? "true" : "false"}>
+            <Link to="/calcular" data-active={path === "/" ? "true" : "false"}>
               <strong>Calculadora</strong>
               <span>Teclado científico y Science Mode.</span>
             </Link>

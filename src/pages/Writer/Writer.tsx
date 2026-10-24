@@ -1,3 +1,5 @@
+import {useDecorations} from '../../decorations/useDecorations';
+import {Sparkles,Frame,Type} from 'lucide-react';
 import {roleHtml,roleCSS,localFigures} from '../../lib/roleFormat';
 import ReaderControls from '../../audio/ReaderControls';
 import PaperPicker from '../../components/PaperPicker';
@@ -114,6 +116,7 @@ export default function Writer() {
   const [askPrefixes, setAskPrefixes] = useState(false);
 
   const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(null);
+  const decorations = useDecorations(taRef,text,setText,activeHojaId);
   const review = useProofreading(text, setText, activeHojaId, selection);
   const [showSelBar, setShowSelBar] = useState(false);
   const [selBarPos, setSelBarPos] = useState({ x: 0, y: 0 });
@@ -904,13 +907,16 @@ export default function Writer() {
       </div>
 
       <div className="w-main">
+        {decorations.panel}
         <textarea
           ref={taRef}
           className="w-textarea"
           data-paper={paperTone}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onSelect={updateSelection}
+          onChange={decorations.onChange}
+          onCompositionStart={decorations.onCompositionStart}
+          onCompositionEnd={decorations.onCompositionEnd}
+          onSelect={() => {decorations.capture();updateSelection();}}
           onMouseUp={updateSelection}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
@@ -933,6 +939,7 @@ export default function Writer() {
 
       {/* Flotantes izq: undo / redo */}
       <div className="w-float left">
+          <button aria-label="Abrir decoración y letras" title={decorations.base.enabled?"Decoración · estilo base activo":"Decoración y letras"} onClick={()=>decorations.open()} style={{display:"grid",placeItems:"center"}}><Sparkles size={19}/></button>
         <button onClick={undo} title="Deshacer (Ctrl+Z)">↶</button>
         <button onClick={redo} title="Rehacer (Ctrl+Y)">↷</button>
       </div>
@@ -954,6 +961,7 @@ export default function Writer() {
           <button onClick={()=>{setShowTheme(true);setShowOptions(false);}}>🎨 Temas</button>
           <button onClick={() => { setShowPaper(true); setShowOptions(false); }}>🎨 Color de hoja</button>
           <button onClick={() => { setShowPreview(true); setShowOptions(false); }}>👁 Vista previa</button>
+          <button className="decor-entry" onClick={() => {decorations.open();setShowOptions(false);}}><Sparkles size={17}/> Decoración y letras</button>
           <button onClick={() => { setShowActions(true); setShowOptions(false); }}>📋 Marcos</button>
           <button onClick={() => { review.start(); setShowOptions(false); }}>🔍 Revisar ortografía</button>
           <button onClick={() => { setShowComments(true); setShowOptions(false); }}>💬 Comentarios</button>
@@ -991,6 +999,8 @@ export default function Writer() {
         <div className="w-sel" style={{ left: selBarPos.x, top: selBarPos.y }}>
           <button title="Comentar" onClick={() => { setSelCommentText(''); setShowSelComment(true); }}>💬</button>
           <button title="Prefijos" onClick={() => setShowPrefixPlatform(true)}>𝒯</button>
+          <button title="Enmarcar selección" aria-label="Enmarcar selección" onClick={() => {decorations.open('frames');setShowSelBar(false);}}><Frame size={17}/></button>
+          <button title="Cambiar letras de la selección" aria-label="Cambiar letras de la selección" onClick={() => {decorations.open('text');setShowSelBar(false);}}><Type size={17}/></button>
           <button title="Leer selección" onClick={() => startVoice(true)}>▶</button>
         </div>
       )}

@@ -1,8 +1,10 @@
+import {readableText} from '../decorations/text';
 import {useEffect,useRef,useState} from 'react';
 import ReaderControls from './ReaderControls';
 import {audioTime} from './StudioPlayer';
 import {readingAudio} from './storage';
-export default function DeviceVoicePreview({text}:{text:string}){
+export default function DeviceVoicePreview({text:inputText}:{text:string}){
+ const text=readableText(inputText);
  const [voices,setVoices]=useState<SpeechSynthesisVoice[]>([]),[voice,setVoice]=useState(''),[rate,setRate]=useState(1),[playing,setPlaying]=useState(false),[position,setPosition]=useState(0);
  const generation=useRef(0),positionRef=useRef(0);
  const stop=()=>{generation.current++;if(playing)window.speechSynthesis?.cancel();setPlaying(false);readingAudio('device-preview',false);};

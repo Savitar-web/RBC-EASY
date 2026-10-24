@@ -1,4 +1,4 @@
-const { app, BrowserWindow, protocol, net, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, protocol, net, ipcMain, shell, dialog, session } = require('electron');
 const path = require('path');
 const {randomUUID}=require('crypto');
 const saves=new Map();
@@ -32,7 +32,7 @@ function safeFile(urlPath) {
   return null;
 }
 
-const ROUTES = new Set(['/', '/proyectos', '/biblias', '/Writer', '/calcular', '/balistica', '/conversion', '/modo-ascendido', '/contacto']);
+const ROUTES = new Set(['/', '/proyectos', '/biblias', '/Writer', '/calcular', '/balistica', '/conversion', '/modo-ascendido', '/contacto', '/cuenta', '/explorar']);
 function shortcutRoute(value) {
   const url = new URL(value, 'app://local');
   if (url.origin !== 'null' && url.host !== 'local') throw new Error('Destino no permitido');
@@ -40,6 +40,7 @@ function shortcutRoute(value) {
   return url.pathname;
 }
 function launchRoute(argv) {
+  const deep=argv.find(value=>value.startsWith('rbceasy:'));if(deep){try{const url=new URL(deep);if(url.hostname==='open')return shortcutRoute(url.searchParams.get('route')||'/');}catch{}return '/';}
   const arg = argv.find(value => value.startsWith('--rbc-route='));
   try { return arg ? shortcutRoute(arg.slice('--rbc-route='.length)) : '/'; }
   catch { return '/'; }
@@ -58,7 +59,7 @@ function writeShortcut(name, url) {
     fs.mkdirSync(iconDir, { recursive: true });
     const localIcon = path.join(iconDir, `${iconKey}.ico`);
     fs.copyFileSync(icon, localIcon);
-    const ok = shell.writeShortcutLink(file, 'create', {
+    const ok = shell.writeShortcutLink(file, fs.existsSync(file)?'replace':'create', {
       target: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath,
       args: args.map(arg => `"${arg}"`).join(' '),
       cwd: path.dirname(process.execPath), description: safe,
@@ -106,6 +107,9 @@ function createWindow(route = '/') {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      devTools: !app.isPackaged,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
   win.loadURL('app://local' + route);
@@ -116,12 +120,22 @@ function activateRoute(route) {
   if(!existing){createWindow(route);return;}
   if(existing.isMinimized())existing.restore();
   existing.show();existing.focus();
-  existing.webContents.send('rbc:navigate',route);
+  if(existing.webContents.isLoadingMainFrame())existing.webContents.once('did-finish-load',()=>existing.webContents.send('rbc:navigate',route));else existing.webContents.send('rbc:navigate',route);
 }
+let protocolRoute='';
+app.on('open-url',(event,url)=>{event.preventDefault();const route=launchRoute([url]);if(app.isReady())activateRoute(route);else protocolRoute=route;});
 const hasLock = app.requestSingleInstanceLock();
 if (!hasLock) app.quit();
 else app.whenReady().then(() => {
   if(process.platform==='win32')app.setAppUserModelId('app.rbc.easy');
+  session.defaultSession.setPermissionRequestHandler((_contents,permission,callback)=>callback(['notifications','clipboard-sanitized-write'].includes(permission)));
+  session.defaultSession.setPermissionCheckHandler((_contents,permission,origin)=>origin==='app://local'&&['notifications','clipboard-sanitized-write'].includes(permission));
+  app.on('web-contents-created',(_event,contents)=>{
+    const external=url=>{try{const parsed=new URL(url);if(parsed.protocol==='https:')void shell.openExternal(parsed.href);}catch{}};
+    contents.setWindowOpenHandler(({url})=>{external(url);return{action:'deny'};});
+    contents.on('will-navigate',(event,url)=>{try{const target=new URL(url);if(target.protocol==='app:'&&target.host==='local')return;}catch{}event.preventDefault();external(url);});
+    contents.on('will-attach-webview',event=>event.preventDefault());
+  });
   protocol.handle('app', (request) => {
     const url = new URL(request.url);
     const file = safeFile(url.pathname);
@@ -144,6 +158,7 @@ else app.whenReady().then(() => {
 
   ipcMain.handle('create-shortcut', (_event, payload) => {
     try {
+      trusted(_event);
       const file = writeShortcut(payload?.name, payload?.url);
       return { ok: true, path: file };
     } catch (error) {
@@ -152,6 +167,7 @@ else app.whenReady().then(() => {
   });
 
   ipcMain.handle('create-all-shortcuts', (_event, list) => {
+    trusted(_event);
     const paths = [];
     const errors = [];
     for (const item of list || []) {
@@ -164,7 +180,8 @@ else app.whenReady().then(() => {
     return { ok: errors.length === 0, paths, errors };
   });
 
-  ipcMain.handle('open-float', () => {
+  ipcMain.handle('open-float', event => {
+    trusted(event);
     const float = new BrowserWindow({
       width: 460,
       height: 760,
@@ -180,13 +197,16 @@ else app.whenReady().then(() => {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+      devTools: !app.isPackaged,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       },
     });
     float.loadURL('app://local/calcular?float=1');
     return { ok: true };
   });
 
-  createWindow(launchRoute(process.argv));
+  createWindow(protocolRoute||launchRoute(process.argv));
   app.on('second-instance', (_event, argv) => activateRoute(launchRoute(argv)));
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

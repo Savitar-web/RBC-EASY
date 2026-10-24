@@ -9,6 +9,11 @@ export default defineConfig({
     name: 'complete-offline-package',
     closeBundle() {
       const root = path.resolve(__dirname, 'dist');
+      const htmlFile=path.join(root,'index.html');
+      const html=fs.readFileSync(htmlFile,'utf8');
+      const hashes=Array.from(html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)).filter(m=>m[1].trim()).map(m=>"'sha256-"+crypto.createHash('sha256').update(m[1]).digest('base64')+"'");
+      const csp=["default-src 'self'", "script-src 'self' 'wasm-unsafe-eval' "+hashes.join(' '), "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob: https:", "media-src 'self' blob: data:", "font-src 'self' data:", "worker-src 'self' blob:", "frame-src 'self' blob:", "connect-src 'self' https://hjoxqzlmrlzwidffvpnt.supabase.co wss://hjoxqzlmrlzwidffvpnt.supabase.co https://huggingface.co https://*.huggingface.co https://*.hf.co https://*.xethub.hf.co", "object-src 'none'", "base-uri 'self'", "form-action 'self'"] .join('; ');
+      fs.writeFileSync(htmlFile,html.replace('<head>','<head>\n    <meta http-equiv="Content-Security-Policy" content="'+csp+'" />'));
       const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
         e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]);
       const files = walk(root).filter(f => !['sw.js', 'offline-assets.json'].includes(path.basename(f)));

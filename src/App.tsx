@@ -1,3 +1,4 @@
+import BackNavigation from './components/BackNavigation';
 import DownloadCenter from './components/DownloadCenter';
 import FirstInstall from './pwa/FirstInstall';
 import Administration from './community/Administration';
@@ -181,7 +182,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <ErrorBoundary><AuthProvider>
-        <PageViewport /><PageBackground />
+        <BackNavigation/><PageViewport /><PageBackground />
         <DocumentTitle />
         <PlatformAccess />
         <DownloadCenter/><FirstInstall/><Publisher/><NeuralReader/><OfflineBadge /><Ambience /><ReadingNotice/>

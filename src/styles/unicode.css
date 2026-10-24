@@ -1,0 +1,16 @@
+@font-face{font-family:'RBC Cuneiform';src:url('/fonts/unicode/notosanscuneiform.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Bamum';src:url('/fonts/unicode/notosansbamum.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Text';src:url('/fonts/unicode/notosans.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Math';src:url('/fonts/unicode/notosansmath.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Symbols';src:url('/fonts/unicode/notosanssymbols2.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Historic';src:url('/fonts/unicode/notosansegyptianhieroglyphs.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Emoji';src:url('/fonts/unicode/notoemoji.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Universal';src:url('/fonts/unicode/unifont-18.0.01.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+@font-face{font-family:'RBC Universal Upper';src:url('/fonts/unicode/unifont_upper-18.0.01.woff2') format('woff2');font-display:swap;font-style:normal;font-weight:100 900;}
+:root{--rbc-unicode:'RBC Text','RBC Math','RBC Symbols','RBC Historic','Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji','RBC Emoji','RBC Bamum','RBC Cuneiform','RBC Universal','RBC Universal Upper'}
+body{font-family:var(--font-main,Georgia),var(--rbc-unicode),serif}
+.bm-textarea,.w-textarea{font-family:'Lora',Georgia,var(--rbc-unicode),serif!important}
+.role-content{font-family:Georgia,var(--rbc-unicode),serif}
+.profile-formatted{font-family:inherit}
+.decor-dialog{font-family:system-ui,var(--rbc-unicode),sans-serif}
+.decor-preview pre,.decor-art-detail pre,.decor-converted,.decor-custom-text,.role-code,.role-inline-code{font-family:'Cascadia Code','Consolas','Menlo','RBC Symbols',var(--rbc-unicode),monospace!important}

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './styles/global.css';
 import './styles/theme.css';
+import './styles/unicode.css';
 import { registerServiceWorker } from './pwa/offline';
 
 registerServiceWorker();

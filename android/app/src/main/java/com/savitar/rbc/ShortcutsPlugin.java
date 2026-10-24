@@ -1,6 +1,7 @@
 package com.savitar.rbc;
 
 import android.content.Intent;
+import androidx.activity.OnBackPressedCallback;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.graphics.drawable.Icon;
@@ -14,7 +15,21 @@ import java.util.Arrays;
 
 @CapacitorPlugin(name = "RbcShortcuts")
 public class ShortcutsPlugin extends Plugin {
-    private static final java.util.List<String> ROUTES = Arrays.asList("/", "/proyectos", "/biblias", "/Writer", "/calcular", "/balistica", "/conversion", "/modo-ascendido", "/contacto");
+    private static final java.util.List<String> ROUTES = Arrays.asList("/", "/proyectos", "/biblias", "/Writer", "/calcular", "/balistica", "/conversion", "/modo-ascendido", "/contacto", "/cuenta", "/explorar");
+    @Override public void load() {
+        getActivity().runOnUiThread(() -> getActivity().getOnBackPressedDispatcher().addCallback(getActivity(), new OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() { notifyListeners("backButton", new JSObject()); }
+        }));
+    }
+    @PluginMethod public void background(PluginCall call) {
+        getActivity().runOnUiThread(() -> { getActivity().moveTaskToBack(true); call.resolve(); });
+    }
+    private String routeFrom(Intent intent) {
+        if(intent==null)return null;
+        String route=intent.getStringExtra("rbcRoute");
+        if(route==null&&intent.getData()!=null&&"rbceasy".equals(intent.getData().getScheme())&&"open".equals(intent.getData().getHost()))route=intent.getData().getQueryParameter("route");
+        return ROUTES.contains(route)?route:null;
+    }
     @PluginMethod public void pin(PluginCall call) {
         String route = call.getString("path", "/");
         String name = call.getString("name", "RBC EASY");
@@ -28,22 +43,26 @@ public class ShortcutsPlugin extends Plugin {
             .setShortLabel(name).setLongLabel("RBC · " + name)
             .setIcon(Icon.createWithResource(getContext(), R.mipmap.ic_launcher)).setIntent(intent).build();
         JSObject result = new JSObject();
-        result.put("requested", manager.requestPinShortcut(shortcut, null));
+        boolean existing=false;for(ShortcutInfo pinned:manager.getPinnedShortcuts())if(pinned.getId().equals(shortcut.getId())&&pinned.isEnabled())existing=true;
+        if(existing){manager.updateShortcuts(Arrays.asList(shortcut));result.put("existing",true);result.put("requested",false);}else result.put("requested", manager.requestPinShortcut(shortcut, null));
         call.resolve(result);
     }
     @PluginMethod public void launchRoute(PluginCall call) {
-        String route = getActivity().getIntent().getStringExtra("rbcRoute");
+        String route = routeFrom(getActivity().getIntent());
         JSObject result = new JSObject();
         result.put("path", ROUTES.contains(route) ? route : "");
         getActivity().getIntent().removeExtra("rbcRoute");
+        getActivity().getIntent().setData(null);
         call.resolve(result);
     }
     @Override protected void handleOnNewIntent(Intent intent) {
         getActivity().setIntent(intent);
-        String route = intent.getStringExtra("rbcRoute");
+        String route = routeFrom(intent);
         if (ROUTES.contains(route)) {
             JSObject data = new JSObject(); data.put("path", route);
             notifyListeners("openRoute", data, true);
+            intent.removeExtra("rbcRoute");
+            intent.setData(null);
         }
     }
 }

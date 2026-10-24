@@ -1,7 +1,9 @@
-export const NEURAL_VOICES=[{value:'es_MX-ald-medium',label:'Ald · México · voz neural'},{value:'es_MX-claude-high',label:'Claude · México · voz neural'},{value:'es_AR-daniela-high',label:'Daniela · Argentina · voz neural'},{value:'es_ES-davefx-medium',label:'David · España · voz neural'}];
+import {readableText} from '../decorations/text';
+export const NEURAL_VOICES=[{value:'es_ES-davefx-medium',label:'David · España · voz neural'},{value:'es_MX-claude-high',label:'Claude · México · voz neural'},{value:'es_AR-daniela-high',label:'Daniela · Argentina · voz neural'},{value:'es_MX-ald-medium',label:'Ald · México · voz neural'}];
 export type VoiceProgress={stage:string;loaded?:number;total?:number;percent?:number};
 let worker:Worker|null=null,workerVoice='',queue:Promise<unknown>=Promise.resolve(),active:symbol|null=null;
-export function neuralSpeech(text:string,voice:string,speed:number,options:{signal?:AbortSignal;format?:'wav'|'mp3';onProgress?:(p:VoiceProgress)=>void}={}){
+export function neuralSpeech(inputText:string,voice:string,speed:number,options:{signal?:AbortSignal;format?:'wav'|'mp3';onProgress?:(p:VoiceProgress)=>void}={}){
+ const text=readableText(inputText);
  const id=Symbol(),aborted=()=>new DOMException('Preparación cancelada','AbortError');
  options.onProgress?.({stage:'Esperando turno del motor de voz'});
  const task=queue.catch(()=>{}).then(()=>new Promise<{bytes:Uint8Array;duration:number;mime:string}>((resolve,reject)=>{

@@ -32,3 +32,8 @@ mac:
   target:
     - dmg
   category: public.app-category.utilities
+
+protocols:
+  - name: RBC EASY
+    schemes:
+      - rbceasy

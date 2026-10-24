@@ -1,3 +1,4 @@
+import {numberExpression} from '../../lib/math/numberExpression';
 /**
  * pages/Calcular/Calcular.tsx
  * Calculadora científica — glassmorphism, teclado grande, √∛∜, historial transparente.
@@ -128,12 +129,7 @@ function safeEval(expr: string, angleMode: 'DEG' | 'RAD' = 'DEG'): number {
       return Math.sign(x) * Math.abs(x) ** (1 / n);
     },
   };
-  for (const name of Object.keys(fns).sort((a, b) => b.length - a.length)) {
-    s = s.replace(new RegExp('\\b' + name + '\\b', 'g'), 'fns.' + name);
-  }
-  // eslint-disable-next-line no-new-func
-  const fn = new Function('fns', '"use strict"; return (' + s + ');');
-  const result = fn(fns);
+  const result = numberExpression(s, fns);
   if (typeof result !== 'number' || !Number.isFinite(result)) throw new Error('Resultado no numérico');
   return result;
 }

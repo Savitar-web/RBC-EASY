@@ -1,7 +1,9 @@
+import {useAuth} from '../../community/Auth';
 import { useNavigate } from 'react-router-dom';
 
 export default function Home() {
   const navigate = useNavigate();
+  const {user,loading}=useAuth();
 
   return (
     <>
@@ -165,7 +167,7 @@ export default function Home() {
           <h1>RBC-EASY</h1>
           <div className="author">Autor · Savitar</div>
 
-          <button className="start-button" onClick={() => navigate('/cuenta')}>
+          <button className="start-button" disabled={loading} onClick={() => navigate(user?'/proyectos':'/cuenta')}>
             Empezar
           </button>
 

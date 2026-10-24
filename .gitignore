@@ -19,3 +19,7 @@ android/capacitor.settings.gradle
 .desktop-build-*
 
 work/native-test-profile-*/
+# Private release credentials
+android/signing.properties
+*.jks
+*.keystore

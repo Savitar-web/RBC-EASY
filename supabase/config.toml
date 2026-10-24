@@ -1,0 +1,4 @@
+# Anonymous denials must reach the audit endpoint. Account JWTs are verified
+# against Auth inside the function; every admin operation remains protected by SQL.
+[functions.admin-gate]
+verify_jwt = false

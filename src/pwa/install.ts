@@ -2,9 +2,10 @@ import {saveAs} from '../components/DownloadCenter';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export const nativeShortcuts = registerPlugin<{
-  pin(options: { name: string; path: string }): Promise<{ requested: boolean }>;
+  pin(options: { name: string; path: string }): Promise<{ requested: boolean; existing?:boolean }>;
   launchRoute(): Promise<{ path: string }>;
-  addListener(event: 'openRoute', listener: (data: { path: string }) => void): Promise<{ remove(): Promise<void> }>;
+  background(): Promise<void>;
+  addListener(event: 'openRoute' | 'backButton', listener: (data: { path: string }) => void): Promise<{ remove(): Promise<void> }>;
 }>('RbcShortcuts');
 export const isNativeAndroid = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 

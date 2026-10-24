@@ -1,3 +1,5 @@
+import {useDecorations} from '../../decorations/useDecorations';
+import {Sparkles,Frame,Type} from 'lucide-react';
 import {saveAs} from '../../components/DownloadCenter';
 import SaveLibraryDialog from '../../components/SaveLibraryDialog';
 import {roleHtml,roleCSS,localFigures} from '../../lib/roleFormat';
@@ -169,6 +171,7 @@ export default function BibliasMaker() {
   const [notification, setNotification] = useState<string | null>(null);
 
   const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(null);
+  const decorations = useDecorations(textareaRef,text,setText,activeHojaId);
   const review = useProofreading(text, setText, activeHojaId, selection, true);
   const [showSelBar, setShowSelBar] = useState(false);
   const [selBarPos, setSelBarPos] = useState({ x: 0, y: 0 });
@@ -395,9 +398,10 @@ export default function BibliasMaker() {
         const parsed: Hoja[] = JSON.parse(saved);
         setHojas(parsed);
         if (parsed.length) {
-          setActiveHojaId(parsed[0].id);
-          setText(parsed[0].content);
-          historyRef.current = [parsed[0].content];
+          const active=parsed.find((h:Hoja)=>h.id===localStorage.getItem('biblias_active_hoja'))||parsed[0];
+          setActiveHojaId(active.id);
+          setText(active.content);
+          historyRef.current = [active.content];
           historyIndex.current = 0;
         }
       } catch {
@@ -499,7 +503,7 @@ export default function BibliasMaker() {
       const { text, hojas, activeHojaId, figures, actions, comments } = latestDraft.current;
       if (activeHojaId) {
         const next = hojas.map(h => h.id === activeHojaId ? {...h, content:text, lastModified:Date.now()} : h);
-        try { localStorage.setItem(HOJAS_KEY, JSON.stringify(next)); } catch { /* existing IndexedDB backup remains available */ }
+        try { localStorage.setItem(HOJAS_KEY, JSON.stringify(next)); localStorage.setItem('biblias_active_hoja',activeHojaId); } catch { /* existing IndexedDB backup remains available */ }
         saveToDB(text);
       }
       try {
@@ -986,13 +990,16 @@ export default function BibliasMaker() {
       </div>
 
       <div className="main-area">
+        {decorations.panel}
         <textarea
           ref={textareaRef}
           className="bm-textarea"
           data-paper={paperTone}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onSelect={updateSelection}
+          onChange={decorations.onChange}
+          onCompositionStart={decorations.onCompositionStart}
+          onCompositionEnd={decorations.onCompositionEnd}
+          onSelect={() => {decorations.capture();updateSelection();}}
           onMouseUp={updateSelection}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
@@ -1011,6 +1018,7 @@ export default function BibliasMaker() {
 
       <div className="bottom-row">
         <div className="bottom-left">
+          <button className="round-btn" aria-label="Abrir decoración y letras" title={decorations.base.enabled?"Decoración · estilo base activo":"Decoración y letras"} onClick={()=>decorations.open()} style={{display:"grid",placeItems:"center"}}><Sparkles size={19}/></button>
           <button className="round-btn" onClick={undo} title="Deshacer">↶</button>
           <button className="round-btn" onClick={redo} title="Rehacer">↷</button>
         </div>
@@ -1025,10 +1033,11 @@ export default function BibliasMaker() {
 
       {showOptions && (
         <div className="options-dropdown scroll-thin">
-          <button onClick={() => { setPreviewHojaId(activeHojaId); setShowPreview(true); setShowOptions(false); }}>👁 Vista previa</button>
           <button onClick={() => { localStorage.setItem('textContent', text); navigate('/Writer'); }}>✍ Modo Escritor</button>
           <button onClick={() => navigate('/proyectos')}>📂 Mis Proyectos</button>
+          <button onClick={() => { setPreviewHojaId(activeHojaId); setShowPreview(true); setShowOptions(false); }}>👁 Vista previa</button>
           <button onClick={() => { setShowHojasMenu(true); setShowOptions(false); }}>📄 Hojas</button>
+          <button className="decor-entry" onClick={() => {decorations.open();setShowOptions(false);}}><Sparkles size={17}/>👾 Decoración y letras</button>
           <button onClick={() => { setShowActions(true); setShowOptions(false); }}>📋 Marcos</button>
           <button onClick={() => { setShowCommentsPanel(true); setShowOptions(false); }}>💬 Comentarios</button>
           <button onClick={() => { setShowBibleCreator(true); setShowOptions(false); }}>📚 Crear Biblias</button>
@@ -1049,6 +1058,8 @@ export default function BibliasMaker() {
         <div className="sel-bar" style={{ left: selBarPos.x, top: selBarPos.y }}>
           <button title="Comentar" onClick={() => { setSelCommentText(''); setShowSelComment(true); }}>💬</button>
           <button title="Prefijos" onClick={() => setShowPrefixPlatform(true)}>𝒯</button>
+          <button title="Enmarcar selección" aria-label="Enmarcar selección" onClick={() => {decorations.open('frames');setShowSelBar(false);}}><Frame size={17}/></button>
+          <button title="Cambiar letras de la selección" aria-label="Cambiar letras de la selección" onClick={() => {decorations.open('text');setShowSelBar(false);}}><Type size={17}/></button>
           <button title="Leer selección" onClick={() => startVoice(true)}>▶</button>
         </div>
       )}
@@ -1175,7 +1186,7 @@ export default function BibliasMaker() {
       {showMediaPanel && (
         <div className="modal-backdrop" onClick={() => setShowMediaPanel(false)}>
           <div className="modal scroll-thin" onClick={(e) => e.stopPropagation()}>
-            <h3>Figuras (caché permanente)</h3>
+            <h3>Figuras</h3>
             <button className="full" onClick={() => mediaInputRef.current?.click()}>➕ Subir</button>
             <input
               ref={mediaInputRef}

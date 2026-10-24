@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Capacitor bridge and custom plugins are reflectively discovered by the WebView.
+-keep @com.getcapacitor.annotation.CapacitorPlugin public class * { *; }
+-keep class com.savitar.rbc.MainActivity { *; }
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault,Signature,InnerClasses,EnclosingMethod
