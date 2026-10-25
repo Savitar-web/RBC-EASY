@@ -32,3 +32,12 @@ Referencias técnicas: [rangos HTTP](https://developer.mozilla.org/en-US/docs/We
 
 Android: mínimo 9 (API 28), target 36, versionCode 9. Las versiones futuras y el audio en segundo plano de iOS requieren pruebas físicas. Se mantienen los límites y pendientes previos documentados en ENTREGA-1.4.1.md.
 Verificación final: assembleRelease + lintRelease correctos (6 min 16 s), APK v2 firmado con el certificado existente, versión 1.4.2 / código 9, 205 recursos idénticos a producción dentro del APK, HTML y motor actuales en Electron, Triskelion verificado en Setup/Portable/ejecutable interno. SHA256SUMS.txt generado y Android Studio abierto.
+
+
+## Revisión de aportaciones y descarga
+
+- Cuatro aportaciones nuevas: Figura de fantasía, Personaje de gala, Retrato de verano, Personaje y máscara. Diez aportaciones en total; los identificadores anteriores y favoritos se conservan. Se omitieron los diseños explícitos.
+- Los tramos grandes se entregan como un flujo a Cache Storage, eliminando el array de bloques y el Blob intermedio por tramo. Se siguen validando versión, rango y tamaño; un tramo fallido se elimina y se reintenta, conservando los ya completados. La caché consume los bytes mientras llegan; el navegador administra la escritura física.
+- Pruebas: streaming antes de finalizar la respuesta; sólo un Blob final compuesto, sin copias Blob por tramo; reanudación, reintentos y ensamblado exacto correctos. La mejora elimina trabajo de memoria/almacenamiento, pero no equivale a una medición de aumento de velocidad de extremo a extremo en todos los dispositivos.
+- Mismos nombres y rutas de entrega 1.4.2; APK con versionCode 10 para actualizar la instalación anterior.
+- Despliegue de esta revisión: dpl_EfgptULitGEUNZeKQo2ATepqnXFc.

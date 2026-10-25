@@ -4,6 +4,17 @@ export function parallelism(){const n=navigator as Navigator&{connection?:{saveD
 const aborted=()=>new DOMException('Descarga pausada','AbortError');
 function requestSignal(signal?:AbortSignal){const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;const reset=()=>{clearTimeout(timer);timer=setTimeout(()=>controller.abort(new Error('La conexión no respondió durante 45 segundos')),45000);};const cancel=()=>controller.abort(aborted());if(signal?.aborted)cancel();else signal?.addEventListener('abort',cancel,{once:true});reset();return{signal:controller.signal,reset,close(){clearTimeout(timer);signal?.removeEventListener('abort',cancel);}};}
 async function body(response:Response,size:number,progress:(n:number,delta:number)=>void,request:ReturnType<typeof requestSignal>){if(!response.ok||!response.body)throw Error('Servidor HTTP '+response.status);const reader=response.body.getReader(),chunks:BlobPart[]=[];let bytes=0;try{while(true){const part=await reader.read();if(part.done)break;request.reset();bytes+=part.value.byteLength;if(bytes>size)throw Error('Tamaño de archivo inesperado');chunks.push(part.value as BlobPart);progress(bytes,part.value.byteLength);}if(bytes!==size)throw Error('Archivo incompleto ('+bytes+' de '+size+' bytes)');return new Blob(chunks,{type:response.headers.get('content-type')||'application/octet-stream'});}catch(error){await reader.cancel().catch(()=>{});throw error;}finally{reader.releaseLock();}}
+// Feed decoded bytes directly into Cache Storage: no intermediate JS chunk array or Blob copy.
+async function persistPart(cache:Cache,key:string,response:Response,size:number,onProgress:(n:number,delta:number)=>void,request:ReturnType<typeof requestSignal>){
+ if(!response.ok||!response.body)throw Error('Servidor HTTP '+response.status);
+ const reader=response.body.getReader();let bytes=0,released=false;
+ const release=()=>{if(!released){released=true;reader.releaseLock();}};
+ const stream=new ReadableStream<Uint8Array>({
+  async pull(controller){try{const part=await reader.read();request.reset();if(part.done){if(bytes!==size)throw Error('Segmento incompleto ('+bytes+' de '+size+' bytes)');release();controller.close();return;}bytes+=part.value.byteLength;if(bytes>size)throw Error('Tamaño de segmento inesperado');onProgress(bytes,part.value.byteLength);controller.enqueue(part.value);}catch(error){await reader.cancel().catch(()=>{});release();controller.error(error);}},
+  async cancel(reason){await reader.cancel(reason).catch(()=>{});release();}
+ });
+ try{await cache.put(key,new Response(stream,{headers:{'x-rbc-size':String(size)}}));}catch(error){await reader.cancel(error).catch(()=>{});release();await cache.delete(key).catch(()=>{});throw error;}
+}
 export async function download(url:string,size:number,onProgress:(bytes:number,delta:number)=>void,signal?:AbortSignal):Promise<{blob:Blob;cleanup:()=>Promise<void>}>{
  const one=async()=>{const request=requestSignal(signal);try{return{blob:await body(await fetch(url,{signal:request.signal,cache:'default'}),size,onProgress,request),cleanup:async()=>{}};}finally{request.close();}};
  if(size<8*1024*1024)return one();
@@ -19,7 +30,7 @@ export async function download(url:string,size:number,onProgress:(bytes:number,d
   for(let attempt=0;attempt<3;attempt++){const request=requestSignal(signal);try{const source=url+(url.includes('?')?'&':'?')+'rbc_range='+part.start+'-'+part.end,options={headers:{Range:'bytes='+part.start+'-'+part.end},signal:request.signal,cache:(attempt?'reload':'default') as RequestCache};
    let response:Response;try{response=await fetch(directURL||source,options);if(directURL&&(response.status===401||response.status===403)){await response.body?.cancel();directURL='';response=await fetch(source,options);}}catch(error){if(!directURL||signal?.aborted)throw error;directURL='';response=await fetch(source,options);}
    if(response.status!==206||response.headers.get('content-range')!=='bytes '+part.start+'-'+part.end+'/'+size||response.headers.get('etag')!==version){await response.body?.cancel();throw Error('El servidor cambió la versión o no respetó el segmento solicitado');}
-   const blob=await body(response,length,(n,delta)=>{progress.set(part.start,n);report(delta);},request);await cache.put(k,new Response(blob,{headers:{'x-rbc-size':String(length)}}));progress.set(part.start,length);report();break;
+   await persistPart(cache,k,response,length,(n,delta)=>{progress.set(part.start,n);report(delta);},request);progress.set(part.start,length);report();break;
   }catch(error){progress.set(part.start,0);report();if(signal?.aborted)throw aborted();if((error as DOMException).name==='QuotaExceededError'||attempt===2)throw error;}finally{request.close();}}
  }catch(error){failure=error;}}}));
  if(signal?.aborted)throw aborted();if(failure)throw failure;
