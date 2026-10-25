@@ -33,6 +33,8 @@ const TITLES: Record<string, string> = {
   '/': 'RBC EASY',
   '/proyectos': 'Proyectos · RBC EASY',
   '/contacto': 'Contacto · RBC EASY',
+  '/cuenta': 'Cuenta · RBC EASY',
+  '/explorar': 'Explorar · RBC EASY',
   '/biblias': 'Biblias Maker · RBC EASY',
   '/Writer': 'Escritor · RBC EASY',
   '/calcular': 'Calculadora · RBC EASY',
@@ -166,6 +168,7 @@ function PlatformAccess() {
     nativeShortcuts.launchRoute().then(({ path }) => { if (path && !disposed) navigate(path); }).catch(console.warn);
     return () => { disposed = true; listener.then(handle => handle.remove()); };
   }, [navigate]);
+  useEffect(()=>{const queue=(window as any).launchQueue;if(!queue?.setConsumer)return;queue.setConsumer((launch:{targetURL?:string})=>{if(!launch.targetURL)return;try{const url=new URL(launch.targetURL);if(url.origin===window.location.origin&&(Object.hasOwn(TITLES,url.pathname)||/^\/(perfil|publicacion)\/[^/]+$/.test(url.pathname)))navigate(url.pathname+url.search+url.hash);}catch{}});return()=>queue.setConsumer(()=>{});},[navigate]);
   useEffect(()=>{const bridge=(window as any).rbcDesktop;if(!bridge?.onNavigate)return;return bridge.onNavigate((path:string)=>{if(Object.hasOwn(TITLES,path))navigate(path);});},[navigate]);
   const params=new URLSearchParams(location.search);
   if(!params.has('install'))return null;

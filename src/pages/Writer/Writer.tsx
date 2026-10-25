@@ -1,3 +1,4 @@
+import {useAutoPrefixes} from '../../components/AutoPrefixes';
 import {idleSave,draftMetadata} from '../../lib/idleSave';
 import {RenameSheetDialog,SheetManager} from '../../components/SheetDialogs';
 import {useDecorations} from '../../decorations/useDecorations';
@@ -107,6 +108,7 @@ export default function Writer() {
   const [paperTone, setPaperTone] = usePaperTone();
 
   const [showOptions, setShowOptions] = useState(false);
+  useEffect(()=>{if(!showOptions)return;const close=(e:PointerEvent)=>{if(!(e.target as Element).closest('.w-menu, .w-float.right'))setShowOptions(false);};const esc=(e:KeyboardEvent)=>{if(e.key==='Escape')setShowOptions(false);};document.addEventListener('pointerdown',close);document.addEventListener('keydown',esc);return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',esc);};},[showOptions]);
   const [showPreview, setShowPreview] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [showActionEditor, setShowActionEditor] = useState(false);
@@ -117,10 +119,10 @@ export default function Writer() {
   const [showPrefixPlatform, setShowPrefixPlatform] = useState(false);
   const [showPrefixCommands, setShowPrefixCommands] = useState(false);
   const [prefixPlatform, setPrefixPlatform] = useState<PrefixPlatform>('whatsapp');
-  const [askPrefixes, setAskPrefixes] = useState(false);
 
   const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(null);
-  const decorations = useDecorations(taRef,text,setText,activeHojaId);
+  const autoPrefixes=useAutoPrefixes(taRef);
+  const decorations = useDecorations(taRef,text,setText,activeHojaId,autoPrefixes.transform);
   const review = useProofreading(text, setText, activeHojaId, selection);
   const [showSelBar, setShowSelBar] = useState(false);
   const [selBarPos, setSelBarPos] = useState({ x: 0, y: 0 });
@@ -899,7 +901,7 @@ export default function Writer() {
       </div>
 
       <div className="w-main">
-        {decorations.panel}
+        {decorations.panel}{autoPrefixes.panel}
         <textarea
           ref={taRef}
           className="w-textarea"
@@ -912,12 +914,7 @@ export default function Writer() {
           onMouseUp={updateSelection}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && askPrefixes) {
-              e.preventDefault();
-              setShowPrefixPlatform(true);
-            }
-          }}
+          onKeyDown={autoPrefixes.onKeyDown}
           placeholder="Escribe tu turno aquí... uwu"
           spellCheck
           lang="es"
@@ -958,14 +955,7 @@ export default function Writer() {
           <button onClick={() => { setShowActions(true); setShowOptions(false); }}>📋 Marcos</button>
           <button onClick={() => { review.start(); setShowOptions(false); }}>🔍 Revisar ortografía</button>
           <button onClick={() => { setShowComments(true); setShowOptions(false); }}>💬 Comentarios</button>
-          <button
-            onClick={() => {
-              setAskPrefixes(!askPrefixes);
-              showNotif(askPrefixes ? 'Prefijos OFF' : 'Prefijos ON (Enter)');
-            }}
-          >
-            {askPrefixes ? '⌨ Apagar prefijos' : '⌨ Encender prefijos'}
-          </button>
+          <button onClick={()=>{autoPrefixes.open();setShowOptions(false);}}>⌨ Prefijos automáticos {autoPrefixes.enabled?"· activos":""}</button>
           <button
             onClick={() => {
               navigator.clipboard.writeText(text);

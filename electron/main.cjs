@@ -124,7 +124,11 @@ function activateRoute(route) {
 }
 let protocolRoute='';
 app.on('open-url',(event,url)=>{event.preventDefault();const route=launchRoute([url]);if(app.isReady())activateRoute(route);else protocolRoute=route;});
+// Installed and portable editions share the same profile and instance lock.
+app.setName('RBC EASY');
+app.setPath('userData',path.join(app.getPath('appData'),'RBC EASY'));
 const hasLock = app.requestSingleInstanceLock();
+app.on('second-instance',(_event,argv)=>{const route=launchRoute(argv);if(app.isReady())activateRoute(route);else protocolRoute=route;});
 if (!hasLock) app.quit();
 else app.whenReady().then(() => {
   if(process.platform==='win32')app.setAppUserModelId('app.rbc.easy');
@@ -207,7 +211,7 @@ else app.whenReady().then(() => {
   });
 
   createWindow(protocolRoute||launchRoute(process.argv));
-  app.on('second-instance', (_event, argv) => activateRoute(launchRoute(argv)));
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

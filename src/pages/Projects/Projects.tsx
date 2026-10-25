@@ -358,12 +358,12 @@ export default function Projects() {
 
         .projects-title {
           position: fixed;
-          top: 0;
+          top: calc(env(safe-area-inset-top, 0px) + 12px);
           left: 50%;
           transform: translateX(-50%);
           margin: 0;
           padding: 20px 30px 16px;
-          font-size: 38px;
+          font-size: clamp(30px, 4.5vw, 50px);
           letter-spacing: 0.15em;
           text-transform: uppercase;
           color: var(--accent);
@@ -848,6 +848,7 @@ export default function Projects() {
             transform: translateX(calc(100% - 16px));
           }
         }
+      @media(min-width:600px) and (orientation:portrait){.projects-title{font-size:46px!important;top:calc(env(safe-area-inset-top,0px) + 24px)}}
       `}</style>
 
       <div className="projects-page">

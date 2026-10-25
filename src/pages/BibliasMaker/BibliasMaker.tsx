@@ -1,3 +1,5 @@
+import FigureLibrary from '../../components/FigureLibrary';
+import {useAutoPrefixes} from '../../components/AutoPrefixes';
 import {idleSave,draftMetadata} from '../../lib/idleSave';
 import {RenameSheetDialog,SheetManager} from '../../components/SheetDialogs';
 import {useDecorations} from '../../decorations/useDecorations';
@@ -27,6 +29,7 @@ interface Figure {
   isVideo: boolean;
   orientation: 'horizontal' | 'vertical' | 'square';
   name?: string;
+  folder?: string;
 }
 
 interface Hoja { closed?:boolean;
@@ -153,6 +156,7 @@ export default function BibliasMaker() {
   const charCount = text.length;
 
   const [showOptions, setShowOptions] = useState(false);
+  useEffect(()=>{if(!showOptions)return;const close=(e:PointerEvent)=>{if(!(e.target as Element).closest('.options-dropdown, .options-btn'))setShowOptions(false);};const esc=(e:KeyboardEvent)=>{if(e.key==='Escape')setShowOptions(false);};document.addEventListener('pointerdown',close);document.addEventListener('keydown',esc);return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',esc);};},[showOptions]);
   const [showPreview, setShowPreview] = useState(false);
   const [previewHojaId, setPreviewHojaId] = useState<string | null>(null);
   const [paperTone,setPaperTone]=usePaperTone();
@@ -175,7 +179,8 @@ export default function BibliasMaker() {
   const [notification, setNotification] = useState<string | null>(null);
 
   const [selection, setSelection] = useState<{ start: number; end: number; text: string } | null>(null);
-  const decorations = useDecorations(textareaRef,text,setText,activeHojaId);
+  const autoPrefixes=useAutoPrefixes(textareaRef);
+  const decorations = useDecorations(textareaRef,text,setText,activeHojaId,autoPrefixes.transform);
   const review = useProofreading(text, setText, activeHojaId, selection, true);
   const [showSelBar, setShowSelBar] = useState(false);
   const [selBarPos, setSelBarPos] = useState({ x: 0, y: 0 });
@@ -206,7 +211,6 @@ export default function BibliasMaker() {
   const [editingAction, setEditingAction] = useState<{ name: string; content: string; index: number | null }>({
     name: '', content: '', index: null,
   });
-  const [askPrefixes, setAskPrefixes] = useState(false);
 
   const showNotif = (msg: string) => {
     setNotification(msg);
@@ -574,7 +578,10 @@ export default function BibliasMaker() {
     }, 0);
   };
 
-  const insertImage = (file: File) => {
+  const [autoImage,setAutoImage]=useState(()=>localStorage.getItem("rbc-auto-image")==="1");
+  const insertImage = (file: File, folder = '') => {
+    if(!/^(image|video)\//.test(file.type)){showNotif('Selecciona una imagen o un vídeo compatible.');return;}
+    if(file.size>20*1024*1024){showNotif('El archivo supera 20 MB. Reduce su tamaño antes de importarlo.');return;}
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
@@ -587,20 +594,21 @@ export default function BibliasMaker() {
         const tag = `[Figura ${id}.0]`;
         setFigures((p) => [
           ...p,
-          { id, tag, src: result, isVideo: file.type.startsWith('video'), orientation, name: file.name },
+          { id, tag, src: result, isVideo: file.type.startsWith('video'), orientation, folder, name: file.name },
         ]);
-        insertTagAtCursor(tag);
+        if(autoImage)insertTagAtCursor(tag);
         showNotif('Figura guardada en caché');
         playClick();
       };
       img.onerror = () => {
+        if(!file.type.startsWith('video/')){showNotif('No se pudo abrir esta imagen. Prueba PNG, JPEG o WebP.');return;}
         const id = figures.length ? Math.max(...figures.map((f) => f.id)) + 1 : 1;
         const tag = `[Figura ${id}.0]`;
         setFigures((p) => [
           ...p,
-          { id, tag, src: result, isVideo: true, orientation: 'horizontal', name: file.name },
+          { id, tag, src: result, isVideo: true, orientation: 'horizontal', folder, name: file.name },
         ]);
-        insertTagAtCursor(tag);
+        if(autoImage)insertTagAtCursor(tag);
         showNotif('Media guardada');
       };
       img.src = result;
@@ -991,7 +999,7 @@ export default function BibliasMaker() {
       </div>
 
       <div className="main-area">
-        {decorations.panel}
+        {decorations.panel}{autoPrefixes.panel}
         <textarea
           ref={textareaRef}
           className="bm-textarea"
@@ -1004,12 +1012,7 @@ export default function BibliasMaker() {
           onMouseUp={updateSelection}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && askPrefixes) {
-              e.preventDefault();
-              setShowPrefixPlatform(true);
-            }
-          }}
+          onKeyDown={autoPrefixes.onKeyDown}
           placeholder="Escribe tu turno aquí... uwu"
           spellCheck
           lang="es"
@@ -1046,9 +1049,7 @@ export default function BibliasMaker() {
           <button onClick={()=>{setShowOptions(false);window.dispatchEvent(new CustomEvent('rbc-publish',{detail:{title:hojas.find(h=>h.id===activeHojaId)?.name||'Mi rol',nodes:[{id:activeHojaId,name:hojas.find(h=>h.id===activeHojaId)?.name||'Hoja',type:'file',parentId:null,content:text,order:0}]}}));}}>↗ Publicar esta hoja</button><button onClick={() => { setShowExport(true); setShowOptions(false); }}>⬇️ Exportar Biblia</button>
           <button onClick={() => { setShowSaveToProjects(true); setSaveAfterExport(false); setShowOptions(false); }}>💾 Guardar en Mis Biblias</button>
           <button onClick={() => { navigator.clipboard.writeText(text); showNotif('Copiado'); setShowOptions(false); }}>📋 Copiar Todo</button>
-          <button onClick={() => { setAskPrefixes(!askPrefixes); showNotif(askPrefixes ? 'Prefijos OFF' : 'Prefijos ON'); }}>
-            {askPrefixes ? '⌨ Apagar prefijos' : '⌨ Encender prefijos'}
-          </button>
+          <button onClick={()=>{autoPrefixes.open();setShowOptions(false);}}>⌨ Prefijos automáticos {autoPrefixes.enabled?"· activos":""}</button>
           <button onClick={() => { setShowSpellAI(true); setShowOptions(false); }}>✨ Limpiar ortografía</button>
           <button onClick={()=>{setShowPaper(true);setShowOptions(false);}}>🎨 Color de hoja</button>
           <button onClick={() => { setShowTheme(true); setShowOptions(false); }}>🎨 Temas</button>
@@ -1185,36 +1186,7 @@ export default function BibliasMaker() {
 
       {showSaveToProjects&&<SaveLibraryDialog current={activeHojaId} sheets={hojas.map(h=>{const list=comments.filter(c=>c.hojaId===h.id);let content=h.id===activeHojaId?text:h.content;if(list.length)content+='\n\n--- COMENTARIOS ---\n'+list.map(c=>`> ${c.type==='selection'?'Selección: '+c.selectedText:'Párrafo '+((c.paragraphIndex||0)+1)} — ${c.text}`).join('\n');return {...h,content};})} close={()=>setShowSaveToProjects(false)} saved={()=>showNotif('Hojas guardadas en Mis Biblias')}/>}
 
-      {showMediaPanel && (
-        <div className="modal-backdrop" onClick={() => setShowMediaPanel(false)}>
-          <div className="modal scroll-thin" onClick={(e) => e.stopPropagation()}>
-            <h3>Figuras</h3>
-            <button className="full" onClick={() => mediaInputRef.current?.click()}>➕ Subir</button>
-            <input
-              ref={mediaInputRef}
-              type="file"
-              accept="image/*,video/*"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) insertImage(f);
-              }}
-            />
-            {figures.map((fig) => (
-              <div key={fig.id} className="figure-item">
-                {fig.isVideo ? (
-                  <video src={fig.src} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} />
-                ) : (
-                  <img src={fig.src} alt="" />
-                )}
-                <div style={{ flex: 1, fontSize: 12, color: 'var(--accent)' }}>{fig.tag}</div>
-                <button onClick={() => { insertTagAtCursor(fig.tag); setShowMediaPanel(false); }}>Insertar</button>
-              </div>
-            ))}
-            <button className="full cancel" onClick={() => setShowMediaPanel(false)}>Cerrar</button>
-          </div>
-        </div>
-      )}
+      {showMediaPanel&&<FigureLibrary figures={figures} change={setFigures} upload={insertImage} auto={autoImage} setAuto={v=>{setAutoImage(v);localStorage.setItem('rbc-auto-image',v?'1':'0');}} close={()=>setShowMediaPanel(false)} insert={tag=>{insertTagAtCursor(tag);setShowMediaPanel(false);}} rename={(old,next)=>{setText(t=>t.split(old).join(next));setHojas(list=>list.map(h=>({...h,content:h.content.split(old).join(next)})));}}/>}
 
       {showActions && (
         <div className="modal-backdrop" onClick={() => setShowActions(false)}>

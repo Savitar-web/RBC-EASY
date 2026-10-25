@@ -1,0 +1,19 @@
+import {useEffect,useState,type RefObject} from 'react';
+import {createPortal} from 'react-dom';
+type Config={enabled:boolean;style:string};
+const styles=[['[B]','Amino · negrita'],['[I]','Amino · cursiva'],['[C]','Amino · centrado'],['[U]','Amino · subrayado'],['[S]','Amino · tachado'],['[BIC]','Amino · centrado, negrita y cursiva'],['*','WhatsApp · negrita'],['_','WhatsApp · cursiva'],['~','WhatsApp · tachado'],['**','Kyodo · negrita'],['__','Kyodo · subrayado'],['`','Código']];
+export function prefixInput(value:string,caret:number,style:string){
+ const start=value.lastIndexOf('\n',Math.max(0,caret-1))+1,end=value.indexOf('\n',caret),stop=end<0?value.length:end,line=value.slice(start,stop);
+ if(!line.trim()||/^\s*(?:```|\[Figura |\[PDF página )/.test(line))return{value,caret};
+ if(style.startsWith('[')){if(/^\s*(?:\[[BUISC]+\])+/i.test(line))return{value,caret};return{value:value.slice(0,start)+style+value.slice(start),caret:caret+style.length};}
+ let body=line,offset=0;if(!body.startsWith(style)){body=style+body;offset=style.length;}
+ if(body.length<=style.length||!body.endsWith(style))body+=style;
+ return{value:value.slice(0,start)+body+value.slice(stop),caret:Math.min(caret+offset,start+body.length-style.length)};
+}
+export function useAutoPrefixes(ref:RefObject<HTMLTextAreaElement|null>){
+ const [config,setConfig]=useState<Config>(()=>{try{return JSON.parse(localStorage.getItem('rbc-auto-prefix-v1')||'{"enabled":false,"style":"[B]"}');}catch{return{enabled:false,style:'[B]'};}}),[open,setOpen]=useState(false);
+ useEffect(()=>{localStorage.setItem('rbc-auto-prefix-v1',JSON.stringify(config));},[config]);
+ const transform=(value:string,caret:number)=>config.enabled?prefixInput(value,caret,config.style):{value,caret};
+ const onKeyDown=(e:React.KeyboardEvent<HTMLTextAreaElement>)=>{if(!config.enabled||config.style.startsWith("[")||e.key!=="Enter")return;const el=e.currentTarget,c=el.selectionStart;if(c===el.selectionEnd&&el.value.slice(c,c+config.style.length)===config.style)el.setSelectionRange(c+config.style.length,c+config.style.length);};
+ return{onKeyDown,transform,enabled:config.enabled,open:()=>setOpen(true),panel:open&&createPortal(<div className="community-overlay" onClick={()=>setOpen(false)}><section className="community-dialog community-glass" role="dialog" aria-modal="true" aria-label="Prefijos automáticos" onClick={e=>e.stopPropagation()}><header><h2>Prefijos automáticos</h2><button onClick={()=>setOpen(false)} aria-label="Cerrar">×</button></header><p>El formato empieza con la primera letra de cada línea. Las líneas vacías se conservan y los prefijos Amino existentes no se duplican.</p><label className="terms-check"><input type="checkbox" role="switch" checked={config.enabled} onChange={e=>setConfig({...config,enabled:e.target.checked})}/> Activar mientras escribo</label><div className="community-actions">{styles.map(([style,label])=><button key={style} aria-pressed={config.style===style} onClick={()=>setConfig({...config,style})}>{label}</button>)}</div><fieldset><legend>Combinar formato Amino</legend><div className="community-actions">{[['B','Negrita'],['I','Cursiva'],['U','Subrayado'],['S','Tachado'],['C','Centrado']].map(([code,label])=><label className="terms-check" key={code}><input type="checkbox" checked={config.style.startsWith('[')&&config.style.includes(code)} onChange={e=>{const current=config.style.startsWith('[')?config.style.replace(/[\[\]]/g,''):'';const next=e.target.checked?current+code:current.replace(code,'');setConfig({...config,style:'['+(next||'B')+']'});}}/>{label}</label>)}</div></fieldset><p>Vista previa: {config.style.startsWith('[')?config.style+'Tu texto':config.style+'Tu texto'+config.style}</p><p>Los cierres se mantienen después del cursor. Puedes editar, seleccionar o borrar el formato cuando quieras.</p><button onClick={()=>setOpen(false)}>Listo</button></section></div>,document.body)};
+}
